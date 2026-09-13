@@ -26,8 +26,16 @@ private const val TAG = "GoogleAuthManager"
 class GoogleAuthManager(
     private val context: Context
 ) {
-    // Standard Google Sign-In for basic profile and email
+    private val webClientId: String = try {
+        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+        if (resId != 0) context.getString(resId) else "209256810606-9tmkauf1lotds835iog7ooq0jgt240dt.apps.googleusercontent.com"
+    } catch (e: Exception) {
+        "209256810606-9tmkauf1lotds835iog7ooq0jgt240dt.apps.googleusercontent.com"
+    }
+
+    // Standard Google Sign-In with Firebase Web Client ID
     private val gso: GoogleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestIdToken(webClientId)
         .requestEmail()
         .requestProfile()
         .build()

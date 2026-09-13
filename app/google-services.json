@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "209256810606",
+    "project_id": "dialy-cc168",
+    "storage_bucket": "dialy-cc168.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:209256810606:android:79597b42a070094ef87e7f",
+        "android_client_info": {
+          "package_name": "com.dialy.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "209256810606-623q5d48krl6fa5ot966t78dr6ei6cph.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.dialy.app",
+            "certificate_hash": "94d9c2fdb05aef0d6920042b065e9d10e2649390"
+          }
+        },
+        {
+          "client_id": "209256810606-9tmkauf1lotds835iog7ooq0jgt240dt.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuJagr1sKBUW4KZniBTqnimRPkblJ70SA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "209256810606-9tmkauf1lotds835iog7ooq0jgt240dt.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
