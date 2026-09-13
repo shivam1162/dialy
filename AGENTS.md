@@ -21,6 +21,10 @@ The long-term product experience is a daily planner containing:
 
 The reference image is the **future frontend/design target**. The final frontend should reproduce that diary/stationery aesthetic very closely, but that is **not the main implementation task right now**.
 
+## Important Workflow Rule: Always Ask Before Building
+
+> **CRITICAL**: The agent/developer MUST ALWAYS ASK the user for confirmation BEFORE triggering any Gradle build, compilation, test suite run, or APK installation (e.g., `./gradlew assembleDebug`, `./gradlew build`, `adb install`). Do not start a build automatically without asking first.
+
 ---
 
 # 2. CURRENT DEVELOPMENT PRIORITY: BACKEND / DATA / APP FOUNDATION
