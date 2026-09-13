@@ -169,7 +169,9 @@ fun TodoListSection(
                 value = newTodoText,
                 onValueChange = { newTodoText = it },
                 textStyle = TextStyle(
-                    fontSize = 13.5.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
                     color = DiaryColors.TextPrimary
                 ),
                 cursorBrush = SolidColor(DiaryColors.SageAccent),
@@ -187,10 +189,12 @@ fun TodoListSection(
                     Box {
                         if (newTodoText.isEmpty()) {
                             Text(
-                                text = "Add a task...",
+                                text = "Add a to-do item...",
                                 style = TextStyle(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                                     fontSize = 13.5.sp,
-                                    color = DiaryColors.TextTertiary
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    color = DiaryColors.SageAccent.copy(alpha = 0.7f)
                                 )
                             )
                         }

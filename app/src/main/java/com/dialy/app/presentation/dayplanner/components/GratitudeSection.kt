@@ -73,7 +73,11 @@ fun GratitudeSection(
                 )
                 Text(
                     text = item.text,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = TextStyle(
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                        fontSize = 14.sp,
+                        color = DiaryColors.TextPrimary
+                    ),
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -101,7 +105,8 @@ fun GratitudeSection(
                 value = newGratitudeText,
                 onValueChange = { newGratitudeText = it },
                 textStyle = TextStyle(
-                    fontSize = 13.5.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                    fontSize = 14.5.sp,
                     color = DiaryColors.TextPrimary
                 ),
                 cursorBrush = SolidColor(DiaryColors.RoseAccent),
@@ -121,9 +126,10 @@ fun GratitudeSection(
                             Text(
                                 text = "I am grateful for...",
                                 style = TextStyle(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                                     fontSize = 13.5.sp,
                                     fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                    color = DiaryColors.TextTertiary
+                                    color = DiaryColors.RoseAccent.copy(alpha = 0.7f)
                                 )
                             )
                         }

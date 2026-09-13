@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dialy.app.presentation.theme.DiaryColors
@@ -67,8 +68,10 @@ fun DailyReminderSection(
             textStyle = TextStyle(
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
-                fontSize = 14.5.sp,
-                color = DiaryColors.TextPrimary
+                fontWeight = FontWeight.Medium,
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                color = androidx.compose.ui.graphics.Color(0xFF263325)
             ),
             cursorBrush = SolidColor(DiaryColors.SageAccent),
             modifier = Modifier.fillMaxWidth(),
@@ -80,8 +83,8 @@ fun DailyReminderSection(
                             style = TextStyle(
                                 fontFamily = FontFamily.Serif,
                                 fontStyle = FontStyle.Italic,
-                                fontSize = 14.sp,
-                                color = DiaryColors.TextTertiary
+                                fontSize = 14.5.sp,
+                                color = DiaryColors.SageAccent.copy(alpha = 0.75f)
                             )
                         )
                     }

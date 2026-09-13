@@ -118,8 +118,9 @@ fun TopPrioritiesSection(
                             onUpdatePriority(order, it, isCompleted)
                         },
                         textStyle = TextStyle(
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                            fontSize = 14.5.sp,
+                            fontWeight = FontWeight.Medium,
                             color = if (isCompleted) DiaryColors.TextTertiary else DiaryColors.TextPrimary,
                             textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
                         ),
@@ -131,8 +132,10 @@ fun TopPrioritiesSection(
                                     Text(
                                         text = "Priority #$order...",
                                         style = TextStyle(
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                                             fontSize = 13.5.sp,
-                                            color = DiaryColors.TextTertiary
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                            color = DiaryColors.RoseAccent.copy(alpha = 0.6f)
                                         )
                                     )
                                 }

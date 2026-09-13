@@ -67,9 +67,11 @@ fun TodaysFocusSection(
             },
             textStyle = TextStyle(
                 fontFamily = FontFamily.Serif,
-                fontSize = 16.sp,
+                fontSize = 16.5.sp,
                 fontWeight = FontWeight.Medium,
-                color = DiaryColors.TextPrimary
+                lineHeight = 24.sp,
+                letterSpacing = 0.4.sp,
+                color = androidx.compose.ui.graphics.Color(0xFF2B2621)
             ),
             cursorBrush = SolidColor(DiaryColors.GoldAccent),
             modifier = Modifier.fillMaxWidth(),
@@ -82,7 +84,8 @@ fun TodaysFocusSection(
                                 fontFamily = FontFamily.Serif,
                                 fontSize = 15.sp,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                color = DiaryColors.TextTertiary
+                                letterSpacing = 0.3.sp,
+                                color = DiaryColors.GoldAccent.copy(alpha = 0.75f)
                             )
                         )
                     }

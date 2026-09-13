@@ -88,7 +88,9 @@ fun ScheduleSection(
                             onUpdateScheduleSlot(item.timeSlot, it)
                         },
                         textStyle = TextStyle(
-                            fontSize = 13.5.sp,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                            fontSize = 14.sp,
+                            letterSpacing = 0.2.sp,
                             color = DiaryColors.TextPrimary
                         ),
                         cursorBrush = SolidColor(DiaryColors.PeachAccent),
@@ -97,10 +99,12 @@ fun ScheduleSection(
                             Box {
                                 if (activityText.isEmpty()) {
                                     Text(
-                                        text = "...",
+                                        text = "Plan this time slot...",
                                         style = TextStyle(
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
                                             fontSize = 13.sp,
-                                            color = DiaryColors.TextTertiary.copy(alpha = 0.5f)
+                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                            color = DiaryColors.PeachAccent.copy(alpha = 0.55f)
                                         )
                                     )
                                 }

@@ -63,9 +63,11 @@ fun NotesIdeasSection(
                 onNotesChange(it)
             },
             textStyle = TextStyle(
-                fontSize = 14.sp,
-                lineHeight = 22.sp,
-                color = DiaryColors.TextPrimary
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontSize = 15.sp,
+                lineHeight = 24.sp,
+                letterSpacing = 0.2.sp,
+                color = androidx.compose.ui.graphics.Color(0xFF2C2824)
             ),
             cursorBrush = SolidColor(DiaryColors.GoldAccent),
             modifier = Modifier
@@ -75,10 +77,12 @@ fun NotesIdeasSection(
                 Box {
                     if (text.isEmpty()) {
                         Text(
-                            text = "Write your thoughts, ideas, or brain dump here...",
+                            text = "Write your thoughts, ideas, or daily notes here...",
                             style = TextStyle(
-                                fontSize = 13.5.sp,
-                                color = DiaryColors.TextTertiary
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                                fontSize = 14.sp,
+                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                color = DiaryColors.GoldAccent.copy(alpha = 0.7f)
                             )
                         )
                     }

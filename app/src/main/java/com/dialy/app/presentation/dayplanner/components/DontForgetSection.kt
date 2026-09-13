@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -139,7 +140,12 @@ fun DontForgetSection(
             BasicTextField(
                 value = newText,
                 onValueChange = { newText = it },
-                textStyle = TextStyle(fontSize = 13.5.sp, color = DiaryColors.TextPrimary),
+                textStyle = TextStyle(
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = DiaryColors.TextPrimary
+                ),
                 cursorBrush = SolidColor(DiaryColors.RoseAccent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(
@@ -155,8 +161,13 @@ fun DontForgetSection(
                     Box {
                         if (newText.isEmpty()) {
                             Text(
-                                text = "Add quick reminder...",
-                                style = TextStyle(fontSize = 13.sp, color = DiaryColors.TextTertiary)
+                                text = "Add a quick reminder...",
+                                style = TextStyle(
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                                    fontSize = 13.5.sp,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                    color = DiaryColors.RoseAccent.copy(alpha = 0.65f)
+                                )
                             )
                         }
                         innerTextField()

@@ -120,7 +120,9 @@ private fun ReflectionPromptField(
             value = value,
             onValueChange = onValueChange,
             textStyle = TextStyle(
-                fontSize = 13.5.sp,
+                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                fontSize = 14.5.sp,
+                lineHeight = 22.sp,
                 color = DiaryColors.TextPrimary
             ),
             cursorBrush = SolidColor(accentColor),
@@ -131,9 +133,10 @@ private fun ReflectionPromptField(
                         Text(
                             text = "Reflect here...",
                             style = TextStyle(
-                                fontSize = 13.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
+                                fontSize = 13.5.sp,
                                 fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                color = DiaryColors.TextTertiary.copy(alpha = 0.6f)
+                                color = accentColor.copy(alpha = 0.65f)
                             )
                         )
                     }
