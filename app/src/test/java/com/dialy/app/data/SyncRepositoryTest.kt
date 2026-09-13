@@ -150,6 +150,36 @@ class SyncRepositoryTest {
         assertEquals("Day 1 focus", restored1?.focus)
         assertEquals("Day 2 focus", restored2?.focus)
     }
+
+    @Test
+    fun `purgeOldLocalData uploads un-synced old planners to Drive and deletes them locally`() = runTest {
+        authRepository.signIn(AuthUser(id = "user1", email = "test@example.com", displayName = "Test User"))
+
+        val today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Kolkata"))
+        val oldDate = com.dialy.app.core.util.DateUtils.toIsoString(today.minusDays(10))
+        val recentDate = com.dialy.app.core.util.DateUtils.toIsoString(today.minusDays(2))
+
+        val oldPlanner = DailyPlanner.createDefault(oldDate).copy(focus = "Old journal 10 days ago")
+        val recentPlanner = DailyPlanner.createDefault(recentDate).copy(focus = "Recent journal 2 days ago")
+
+        plannerRepository.savePlanner(oldPlanner)
+        plannerRepository.savePlanner(recentPlanner)
+
+        val purgeResult = syncRepository.purgeOldLocalData(retentionDays = 7)
+        assertTrue(purgeResult.isSuccess)
+        assertEquals(1, purgeResult.getOrNull())
+
+        // Old planner purged from local DB
+        assertNull(fakePlannerDao.getPlannerByDateOnce(oldDate))
+
+        // Recent planner retained locally in DB
+        assertNotNull(fakePlannerDao.getPlannerByDateOnce(recentDate))
+
+        // Old planner safely archived in Google Drive
+        val driveFile = fakeDriveDataSource.downloadFile("planner_$oldDate.json").getOrNull()
+        assertNotNull(driveFile)
+        assertTrue(driveFile!!.contains("Old journal 10 days ago"))
+    }
 }
 
 // =========================================================================

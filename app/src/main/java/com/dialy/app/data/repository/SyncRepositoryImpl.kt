@@ -180,4 +180,42 @@ class SyncRepositoryImpl(
             SyncResult.Error("Restore from cloud failed: ${e.message}", e)
         }
     }
+
+    override suspend fun purgeOldLocalData(retentionDays: Int): Result<Int> = withContext(dispatchers.io) {
+        try {
+            val istZone = java.time.ZoneId.of("Asia/Kolkata")
+            val today = java.time.LocalDate.now(istZone)
+            val cutoffDate = today.minusDays(retentionDays.toLong())
+            val cutoffDateStr = DateUtils.toIsoString(cutoffDate)
+
+            // 1. Get all local planners older than the retention window
+            val allPlanners = plannerDao.getAllPlannersOnce()
+            val oldPlanners = allPlanners.filter { it.date <= cutoffDateStr }
+
+            var purgedCount = 0
+            for (oldPlanner in oldPlanners) {
+                val date = oldPlanner.date
+                val fullPlanner = plannerRepository.getPlanner(date) ?: continue
+
+                // 2. Verify that this planner exists in Google Drive
+                val fileName = "planner_$date.json"
+                val remoteCheck = driveDataSource.downloadFile(fileName)
+                val existsOnDrive = remoteCheck.getOrNull() != null
+
+                if (!existsOnDrive) {
+                    // Upload to Drive first before purging
+                    val payload = json.encodeToString(fullPlanner.copy(syncState = SyncState.SYNCED))
+                    driveDataSource.uploadFile(fileName, payload)
+                }
+
+                // 3. Purge from local Room database
+                plannerRepository.deletePlanner(date)
+                purgedCount++
+            }
+
+            Result.success(purgedCount)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

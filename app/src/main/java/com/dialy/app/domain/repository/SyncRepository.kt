@@ -30,4 +30,10 @@ interface SyncRepository {
      * Restores all planners from Google Drive backup snapshot into local database.
      */
     suspend fun restoreFromCloud(): SyncResult<List<DailyPlanner>>
+
+    /**
+     * Nightly retention clean-up: Ensures data older than retentionDays is backed up in Google Drive,
+     * then purges local records so that only the rolling retention window lives on device.
+     */
+    suspend fun purgeOldLocalData(retentionDays: Int = 7): Result<Int>
 }

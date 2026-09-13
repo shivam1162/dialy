@@ -99,6 +99,9 @@ dependencies {
     implementation("com.google.api-client:google-api-client-android:2.4.0")
     implementation("com.google.apis:google-api-services-drive:v3-rev20240123-2.0.0")
 
+    // AndroidX WorkManager (Nightly 11 PM Sync & Retention Purge)
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")

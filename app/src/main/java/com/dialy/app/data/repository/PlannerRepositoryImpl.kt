@@ -137,6 +137,12 @@ class PlannerRepositoryImpl(
 
     override suspend fun deletePlanner(date: String): Unit = withContext(dispatchers.io) {
         plannerDao.deletePlanner(date)
+        todoDao.deleteTodosByDate(date)
+        priorityDao.deletePrioritiesByDate(date)
+        scheduleDao.deleteScheduleByDate(date)
+        selfCareDao.deleteSelfCareByDate(date)
+        reminderDao.deleteRemindersByDate(date)
+        gratitudeDao.deleteGratitudeByDate(date)
     }
 
     override suspend fun plannerExists(date: String): Boolean = withContext(dispatchers.io) {
