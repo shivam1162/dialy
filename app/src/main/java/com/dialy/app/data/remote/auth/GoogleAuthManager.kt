@@ -109,20 +109,20 @@ class GoogleAuthManager(
     }
 
     /**
-     * Signs out the current Google account.
+     * Signs out the current Google account and clears cached Google Sign-In state
+     * so that the next sign-in prompts the user to select an account.
      */
     suspend fun signOut(): Result<Unit> {
         return try {
             suspendCancellableCoroutine { continuation ->
                 googleSignInClient.signOut()
-                    .addOnCompleteListener { task ->
-                        if (task.isSuccessful) {
-                            continuation.resume(Unit)
-                        } else {
-                            continuation.resumeWithException(
-                                task.exception ?: Exception("Sign-out task failed")
-                            )
+                    .addOnCompleteListener {
+                        try {
+                            googleSignInClient.revokeAccess()
+                        } catch (e: Exception) {
+                            // ignore revoke failure
                         }
+                        continuation.resume(Unit)
                     }
             }
             Result.success(Unit)

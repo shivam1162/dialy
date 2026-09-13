@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -43,10 +44,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
 import com.dialy.app.core.auth.AuthState
+import com.dialy.app.core.auth.AuthUser
 import com.dialy.app.core.sync.SyncState
 import com.dialy.app.core.util.DateUtils
 import com.dialy.app.presentation.theme.DiaryColors
@@ -83,19 +88,39 @@ fun HeaderSection(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when (authState) {
                         is AuthState.Authenticated -> {
-                            Text("Signed in as:", style = MaterialTheme.typography.labelSmall)
-                            Text(
-                                text = authState.user.email,
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            authState.user.displayName?.let {
-                                Text(text = it, style = MaterialTheme.typography.labelSmall)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(DiaryColors.SubtleCard)
+                                    .padding(10.dp)
+                            ) {
+                                UserAvatar(
+                                    user = authState.user,
+                                    size = 46.dp
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    authState.user.displayName?.let {
+                                        Text(
+                                            text = it,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DiaryColors.TextPrimary
+                                        )
+                                    }
+                                    Text(
+                                        text = authState.user.email,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = DiaryColors.TextSecondary
+                                    )
+                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "Cloud storage: Google Drive (appDataFolder)",
                                 style = MaterialTheme.typography.labelSmall,
@@ -228,34 +253,11 @@ fun HeaderSection(
                 }
 
                 // Profile Avatar / Settings button
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(DiaryColors.SubtleCard)
-                        .border(1.dp, DiaryColors.BorderSubtle, CircleShape)
-                        .clickable { showAccountDialog = true },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (authState is AuthState.Authenticated) {
-                        val initial = authState.user.displayName?.firstOrNull()?.uppercase()
-                            ?: authState.user.email.firstOrNull()?.uppercase()
-                            ?: "U"
-                        Text(
-                            text = initial,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = DiaryColors.GoldAccent
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = "Account",
-                            tint = DiaryColors.TextSecondary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
+                UserAvatar(
+                    user = (authState as? AuthState.Authenticated)?.user,
+                    size = 30.dp,
+                    modifier = Modifier.clickable { showAccountDialog = true }
+                )
             }
         }
 
@@ -316,3 +318,82 @@ fun HeaderSection(
         }
     }
 }
+
+/**
+ * Renders the user's Google profile picture.
+ * If the profile picture URL is not set or fails to load, gracefully falls back to the user's first letter initial.
+ * If unauthenticated, displays the generic account icon.
+ */
+@Composable
+fun UserAvatar(
+    user: AuthUser?,
+    size: Dp = 28.dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(DiaryColors.SubtleCard)
+            .border(1.dp, DiaryColors.BorderSubtle, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        if (user != null) {
+            val initial = user.displayName?.firstOrNull()?.uppercase()
+                ?: user.email.firstOrNull()?.uppercase()
+                ?: "U"
+
+            if (!user.photoUrl.isNullOrBlank()) {
+                SubcomposeAsyncImage(
+                    model = user.photoUrl,
+                    contentDescription = user.displayName ?: "Profile Picture",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape),
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = initial,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = DiaryColors.GoldAccent
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = initial,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = DiaryColors.GoldAccent
+                            )
+                        }
+                    }
+                )
+            } else {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = DiaryColors.GoldAccent
+                )
+            }
+        } else {
+            Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Account",
+                tint = DiaryColors.TextSecondary,
+                modifier = Modifier.size(size * 0.65f)
+            )
+        }
+    }
+}
+

@@ -11,7 +11,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
 import com.dialy.app.core.auth.AuthState
 import com.dialy.app.core.util.DefaultDispatcherProvider
 import com.dialy.app.data.local.database.AppDatabase
@@ -120,6 +122,7 @@ fun AppNavigation(
 ) {
     val authState by viewModel.authState.collectAsState()
     val isGuestMode by viewModel.isGuestMode.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     // Google Sign-In Activity Result Launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
@@ -135,13 +138,25 @@ fun AppNavigation(
 
     // If authenticated OR continuing as guest -> show Day Planner
     if (authState is AuthState.Authenticated || isGuestMode) {
-        DayPlannerScreen(viewModel = viewModel)
+        DayPlannerScreen(
+            viewModel = viewModel,
+            onSignOutClick = {
+                coroutineScope.launch {
+                    googleAuthManager.signOut()
+                    viewModel.onSignOut()
+                }
+            }
+        )
     } else {
         // First time / unauthenticated -> Show Google Sign In screen with Drive permission details
         AuthScreen(
             authState = authState,
             onSignInClick = {
-                googleSignInLauncher.launch(googleAuthManager.signInIntent)
+                coroutineScope.launch {
+                    // Sign out first to clear any cached session so Google Account Chooser is guaranteed to pop up
+                    googleAuthManager.signOut()
+                    googleSignInLauncher.launch(googleAuthManager.signInIntent)
+                }
             },
             onSkipGuestClick = {
                 viewModel.onSkipGuestMode()

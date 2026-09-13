@@ -39,7 +39,8 @@ import com.dialy.app.presentation.theme.DiaryTheme
 
 @Composable
 fun DayPlannerScreen(
-    viewModel: DayPlannerViewModel
+    viewModel: DayPlannerViewModel,
+    onSignOutClick: (() -> Unit)? = null
 ) {
     val currentDate by viewModel.currentDate.collectAsState()
     val planner by viewModel.planner.collectAsState()
@@ -85,7 +86,13 @@ fun DayPlannerScreen(
                         onNextDay = { viewModel.onNextDay() },
                         onToday = { viewModel.onToday() },
                         onSyncClick = { viewModel.onTriggerSync() },
-                        onSignOutClick = { viewModel.onSignOut() }
+                        onSignOutClick = {
+                            if (onSignOutClick != null) {
+                                onSignOutClick()
+                            } else {
+                                viewModel.onSignOut()
+                            }
+                        }
                     )
                 }
 
