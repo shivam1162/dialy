@@ -20,7 +20,6 @@ private const val UNIQUE_WORK_NAME = "DailyDriveAutoBackupWork"
 private const val PREFS_NAME = "diary_auto_backup_prefs"
 private const val KEY_HOUR = "backup_hour"
 private const val KEY_MINUTE = "backup_minute"
-private const val KEY_ENABLED = "backup_enabled"
 
 /**
  * Manages scheduling and timing for Google Drive automated daily backups.
@@ -29,11 +28,6 @@ object DailySyncScheduler {
 
     const val DEFAULT_HOUR = 23
     const val DEFAULT_MINUTE = 0
-
-    fun isAutoBackupEnabled(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean(KEY_ENABLED, true)
-    }
 
     fun getScheduledHour(context: Context): Int {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -58,23 +52,15 @@ object DailySyncScheduler {
     fun scheduleDailySync(
         context: Context,
         hour: Int = getScheduledHour(context),
-        minute: Int = getScheduledMinute(context),
-        enabled: Boolean = isAutoBackupEnabled(context)
+        minute: Int = getScheduledMinute(context)
     ) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit()
             .putInt(KEY_HOUR, hour)
             .putInt(KEY_MINUTE, minute)
-            .putBoolean(KEY_ENABLED, enabled)
             .apply()
 
         val workManager = WorkManager.getInstance(context)
-
-        if (!enabled) {
-            Log.d(TAG, "Auto-backup disabled by user. Cancelling unique work '$UNIQUE_WORK_NAME'")
-            workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
-            return
-        }
 
         val initialDelay = calculateInitialDelay(hour, minute)
         Log.d(TAG, "Rescheduling daily backup for $hour:${minute.toString().padStart(2, '0')}. Delay: ${initialDelay.toMinutes()} minutes")
@@ -102,9 +88,7 @@ object DailySyncScheduler {
      * Initial startup scheduler call.
      */
     fun scheduleNightlySync(context: Context) {
-        if (isAutoBackupEnabled(context)) {
-            scheduleDailySync(context)
-        }
+        scheduleDailySync(context)
     }
 
     /**

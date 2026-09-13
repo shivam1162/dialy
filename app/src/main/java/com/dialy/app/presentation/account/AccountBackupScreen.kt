@@ -41,9 +41,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import com.dialy.app.core.notification.AppNotificationManager
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -101,9 +99,6 @@ fun AccountBackupScreen(
     var showTimePickerDialog by remember { mutableStateOf(false) }
 
     // Auto-backup settings state
-    var isAutoBackupEnabled by remember {
-        mutableStateOf(DailySyncScheduler.isAutoBackupEnabled(context))
-    }
     var scheduledHour by remember {
         mutableIntStateOf(DailySyncScheduler.getScheduledHour(context))
     }
@@ -188,18 +183,8 @@ fun AccountBackupScreen(
                 // 3. Automated Daily Backup Timing Card
                 AutoBackupScheduleCard(
                     context = context,
-                    isEnabled = isAutoBackupEnabled,
                     hour = scheduledHour,
                     minute = scheduledMinute,
-                    onToggleEnabled = { enabled ->
-                        isAutoBackupEnabled = enabled
-                        DailySyncScheduler.scheduleDailySync(
-                            context = context,
-                            hour = scheduledHour,
-                            minute = scheduledMinute,
-                            enabled = enabled
-                        )
-                    },
                     onChangeTimeClick = { showTimePickerDialog = true }
                 )
 
@@ -330,10 +315,8 @@ fun AccountBackupScreen(
                             DailySyncScheduler.scheduleDailySync(
                                 context = context,
                                 hour = timePickerState.hour,
-                                minute = timePickerState.minute,
-                                enabled = true
+                                minute = timePickerState.minute
                             )
-                            isAutoBackupEnabled = true
                             showTimePickerDialog = false
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = DiaryColors.GoldAccent)
@@ -694,10 +677,8 @@ private fun GoogleDriveBackupCard(
 @Composable
 private fun AutoBackupScheduleCard(
     context: Context,
-    isEnabled: Boolean,
     hour: Int,
     minute: Int,
-    onToggleEnabled: (Boolean) -> Unit,
     onChangeTimeClick: () -> Unit
 ) {
     Card(
@@ -713,89 +694,71 @@ private fun AutoBackupScheduleCard(
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(DiaryColors.SageSoft),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Schedule,
+                        contentDescription = null,
+                        tint = DiaryColors.SageAccent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Column {
+                    Text(
+                        text = "Daily Auto-Backup",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = DiaryColors.TextPrimary
+                    )
+                    Text(
+                        text = "Runs silently in background once a day",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DiaryColors.TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DiaryColors.SubtleCard)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(DiaryColors.SageSoft),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Schedule,
-                            contentDescription = null,
-                            tint = DiaryColors.SageAccent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Column {
-                        Text(
-                            text = "Daily Auto-Backup",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = DiaryColors.TextPrimary
-                        )
-                        Text(
-                            text = "Runs silently in background once a day",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = DiaryColors.TextSecondary,
-                            fontSize = 11.sp
-                        )
-                    }
+                Column {
+                    Text(
+                        text = "BACKUP TIME",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DiaryColors.TextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = DailySyncScheduler.getFormattedScheduledTime(context),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = DiaryColors.TextPrimary
+                    )
                 }
 
-                Switch(
-                    checked = isEnabled,
-                    onCheckedChange = onToggleEnabled,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = DiaryColors.SageAccent,
-                        uncheckedThumbColor = DiaryColors.TextTertiary,
-                        uncheckedTrackColor = DiaryColors.SubtleCard
-                    )
-                )
-            }
-
-            if (isEnabled) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(DiaryColors.SubtleCard)
-                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                OutlinedButton(
+                    onClick = onChangeTimeClick,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = DiaryColors.GoldAccent),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DiaryColors.GoldAccent)
                 ) {
-                    Column {
-                        Text(
-                            text = "BACKUP TIME",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = DiaryColors.TextSecondary,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = DailySyncScheduler.getFormattedScheduledTime(context),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = DiaryColors.TextPrimary
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = onChangeTimeClick,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = DiaryColors.GoldAccent),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DiaryColors.GoldAccent)
-                    ) {
-                        Text("Change Time", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Text("Change Time", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
