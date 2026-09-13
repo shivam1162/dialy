@@ -31,7 +31,13 @@ fun NotesIdeasSection(
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember(notes) { mutableStateOf(notes) }
+    var text by remember { mutableStateOf(notes) }
+
+    androidx.compose.runtime.LaunchedEffect(notes) {
+        if (notes != text) {
+            text = notes
+        }
+    }
 
     Column(
         modifier = modifier

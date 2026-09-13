@@ -22,6 +22,8 @@ import com.dialy.app.domain.repository.AuthRepository
 import com.dialy.app.domain.repository.PlannerRepository
 import com.dialy.app.domain.repository.SyncRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +52,14 @@ class DayPlannerViewModel(
 
     private val _isGuestMode = MutableStateFlow(false)
     val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
+
+    // Debounce job holders to ensure smooth typing with zero jitter/recomposition lag
+    private var focusDebounceJob: Job? = null
+    private val priorityDebounceJobs = mutableMapOf<Int, Job>()
+    private val scheduleDebounceJobs = mutableMapOf<String, Job>()
+    private var notesDebounceJob: Job? = null
+    private var reflectionDebounceJob: Job? = null
+    private var reminderDebounceJob: Job? = null
 
     val planner: StateFlow<DailyPlanner?> = _currentDate
         .flatMapLatest { date ->
@@ -115,7 +125,9 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateFocus(focus: String) {
-        viewModelScope.launch {
+        focusDebounceJob?.cancel()
+        focusDebounceJob = viewModelScope.launch {
+            delay(300L)
             try {
                 plannerRepository.updateFocus(_currentDate.value, focus)
             } catch (e: Exception) {
@@ -125,7 +137,11 @@ class DayPlannerViewModel(
     }
 
     fun onUpdatePriority(order: Int, title: String, isCompleted: Boolean = false) {
-        viewModelScope.launch {
+        priorityDebounceJobs[order]?.cancel()
+        priorityDebounceJobs[order] = viewModelScope.launch {
+            if (!isCompleted) {
+                delay(300L)
+            }
             try {
                 val currentPriorities = planner.value?.topPriorities?.toMutableList() ?: mutableListOf()
                 val existingIndex = currentPriorities.indexOfFirst { it.order == order }
@@ -190,7 +206,9 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateScheduleSlot(slot: String, activity: String) {
-        viewModelScope.launch {
+        scheduleDebounceJobs[slot]?.cancel()
+        scheduleDebounceJobs[slot] = viewModelScope.launch {
+            delay(300L)
             try {
                 val currentSchedule = planner.value?.schedule?.toMutableList() ?: mutableListOf()
                 val index = currentSchedule.indexOfFirst { it.timeSlot == slot }
@@ -224,7 +242,9 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateNotes(notes: String) {
-        viewModelScope.launch {
+        notesDebounceJob?.cancel()
+        notesDebounceJob = viewModelScope.launch {
+            delay(350L)
             try {
                 plannerRepository.updateNotes(_currentDate.value, notes)
             } catch (e: Exception) {
@@ -301,7 +321,9 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateReflection(whatWentWell: String, whatCanImprove: String, proudOf: String) {
-        viewModelScope.launch {
+        reflectionDebounceJob?.cancel()
+        reflectionDebounceJob = viewModelScope.launch {
+            delay(350L)
             try {
                 val reflection = Reflection(
                     whatWentWell = whatWentWell,
@@ -317,7 +339,9 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateDailyReminder(text: String) {
-        viewModelScope.launch {
+        reminderDebounceJob?.cancel()
+        reminderDebounceJob = viewModelScope.launch {
+            delay(300L)
             try {
                 plannerRepository.updateDailyReminder(_currentDate.value, text)
             } catch (e: Exception) {

@@ -56,7 +56,13 @@ fun ScheduleSection(
         val displaySlots = if (schedule.isNotEmpty()) schedule else defaultSlots()
 
         displaySlots.forEach { item ->
-            var activityText by remember(item.activity) { mutableStateOf(item.activity) }
+            var activityText by remember(item.timeSlot) { mutableStateOf(item.activity) }
+
+            androidx.compose.runtime.LaunchedEffect(item.activity) {
+                if (item.activity != activityText) {
+                    activityText = item.activity
+                }
+            }
 
             Row(
                 modifier = Modifier

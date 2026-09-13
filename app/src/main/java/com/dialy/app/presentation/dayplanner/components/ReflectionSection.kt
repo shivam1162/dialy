@@ -32,9 +32,19 @@ fun ReflectionSection(
     onUpdateReflection: (whatWentWell: String, whatCanImprove: String, proudOf: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var wentWell by remember(reflection.whatWentWell) { mutableStateOf(reflection.whatWentWell) }
-    var improve by remember(reflection.whatCanImprove) { mutableStateOf(reflection.whatCanImprove) }
-    var proud by remember(reflection.proudOf) { mutableStateOf(reflection.proudOf) }
+    var wentWell by remember { mutableStateOf(reflection.whatWentWell) }
+    var improve by remember { mutableStateOf(reflection.whatCanImprove) }
+    var proud by remember { mutableStateOf(reflection.proudOf) }
+
+    androidx.compose.runtime.LaunchedEffect(reflection.whatWentWell) {
+        if (reflection.whatWentWell != wentWell) wentWell = reflection.whatWentWell
+    }
+    androidx.compose.runtime.LaunchedEffect(reflection.whatCanImprove) {
+        if (reflection.whatCanImprove != improve) improve = reflection.whatCanImprove
+    }
+    androidx.compose.runtime.LaunchedEffect(reflection.proudOf) {
+        if (reflection.proudOf != proud) proud = reflection.proudOf
+    }
 
     Column(
         modifier = modifier

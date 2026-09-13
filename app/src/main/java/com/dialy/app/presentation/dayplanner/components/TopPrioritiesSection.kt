@@ -63,8 +63,15 @@ fun TopPrioritiesSection(
 
         (1..3).forEach { order ->
             val priority = priorities.firstOrNull { it.order == order }
-            var titleText by remember(priority?.title) { mutableStateOf(priority?.title ?: "") }
+            var titleText by remember(order) { mutableStateOf(priority?.title ?: "") }
             val isCompleted = priority?.isCompleted ?: false
+
+            androidx.compose.runtime.LaunchedEffect(priority?.title) {
+                val remoteTitle = priority?.title ?: ""
+                if (remoteTitle != titleText) {
+                    titleText = remoteTitle
+                }
+            }
 
             Row(
                 modifier = Modifier

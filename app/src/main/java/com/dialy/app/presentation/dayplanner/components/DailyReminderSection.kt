@@ -33,7 +33,13 @@ fun DailyReminderSection(
     onReminderChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember(reminder) { mutableStateOf(reminder) }
+    var text by remember { mutableStateOf(reminder) }
+
+    androidx.compose.runtime.LaunchedEffect(reminder) {
+        if (reminder != text) {
+            text = reminder
+        }
+    }
 
     Column(
         modifier = modifier

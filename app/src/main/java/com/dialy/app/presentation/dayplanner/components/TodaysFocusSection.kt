@@ -33,7 +33,13 @@ fun TodaysFocusSection(
     onFocusChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember(focus) { mutableStateOf(focus) }
+    var text by remember { mutableStateOf(focus) }
+
+    androidx.compose.runtime.LaunchedEffect(focus) {
+        if (focus != text) {
+            text = focus
+        }
+    }
 
     Column(
         modifier = modifier
