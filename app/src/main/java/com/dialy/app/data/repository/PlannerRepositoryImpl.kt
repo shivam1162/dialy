@@ -131,6 +131,13 @@ class PlannerRepositoryImpl(
         plannerDao.updateSyncState(date, syncState, lastSyncedAt)
     }
 
+    override suspend fun clearAllLocalData() = withContext(dispatchers.io) {
+        if (context != null) {
+            val db = com.dialy.app.data.local.database.AppDatabase.getInstance(context, activeProfileId)
+            db.clearAllTables()
+        }
+    }
+
     override suspend fun savePlanner(planner: DailyPlanner): DailyPlanner = withContext(dispatchers.io) {
         val now = System.currentTimeMillis()
         val updatedPlanner = if (planner.syncState == SyncState.SYNCED) {

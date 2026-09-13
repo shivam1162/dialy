@@ -99,6 +99,7 @@ dependencies {
     // Google Drive API
     implementation("com.google.api-client:google-api-client-android:2.4.0")
     implementation("com.google.apis:google-api-services-drive:v3-rev20240123-2.0.0")
+    implementation("com.google.http-client:google-http-client-gson:1.44.1")
 
     // AndroidX WorkManager (Nightly 11 PM Sync & Retention Purge)
     implementation("androidx.work:work-runtime-ktx:2.9.0")

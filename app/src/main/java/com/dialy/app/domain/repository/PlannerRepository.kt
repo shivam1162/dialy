@@ -92,6 +92,11 @@ interface PlannerRepository {
     suspend fun getAllPlannersOnce(): List<DailyPlanner> = emptyList()
 
     /**
+     * Wipes all local planner entries and items for the active profile (used before cloud restore).
+     */
+    suspend fun clearAllLocalData() {}
+
+    /**
      * Switches the active local storage profile (e.g. "guest", "user@gmail.com").
      */
     fun switchProfile(profileId: String) {}

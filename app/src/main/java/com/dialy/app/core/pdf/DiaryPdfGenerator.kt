@@ -278,58 +278,24 @@ object DiaryPdfGenerator {
             // Finish page
             pdfDocument.finishPage(page)
 
-            // 15. Save to Cache for instant viewing via FileProvider
+            // 15. Save to Cache for instant preview viewing via FileProvider (no public downloading)
             val cacheFile = File(context.cacheDir, fileName)
             FileOutputStream(cacheFile).use { out ->
                 pdfDocument.writeTo(out)
             }
+            pdfDocument.close()
+
             val contentUri = FileProvider.getUriForFile(
                 context,
                 "${context.packageName}.fileprovider",
                 cacheFile
             )
 
-            // 16. Save copy to public Downloads folder for user accessibility
-            var destDescription = "Saved to Downloads"
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val contentValues = ContentValues().apply {
-                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                        put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Dialy")
-                    }
-                    val downloadsUri = context.contentResolver.insert(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                        contentValues
-                    )
-                    if (downloadsUri != null) {
-                        context.contentResolver.openOutputStream(downloadsUri)?.use { out ->
-                            cacheFile.inputStream().use { input ->
-                                input.copyTo(out)
-                            }
-                        }
-                        destDescription = "Saved to Downloads/Dialy/$fileName"
-                    }
-                } else {
-                    @Suppress("DEPRECATION")
-                    val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-                    val targetDir = File(downloadsDir, "Dialy").apply { if (!exists()) mkdirs() }
-                    val targetFile = File(targetDir, fileName)
-                    cacheFile.copyTo(targetFile, overwrite = true)
-                    destDescription = "Saved to Downloads/Dialy/$fileName"
-                }
-            } catch (e: Exception) {
-                // If writing to public Downloads failed, the cache copy with FileProvider is still 100% functional
-                destDescription = "Saved to app documents: $fileName"
-            } finally {
-                pdfDocument.close()
-            }
-
             PdfExportResult(
                 uri = contentUri,
                 file = cacheFile,
                 fileName = fileName,
-                destinationDescription = destDescription
+                destinationDescription = "Preview"
             )
         }
     }

@@ -5,6 +5,11 @@ import com.dialy.app.core.sync.SyncState
 import com.dialy.app.domain.model.DailyPlanner
 import kotlinx.coroutines.flow.StateFlow
 
+data class BackupMetadata(
+    val lastBackupTime: Long,
+    val plannerCount: Int = 0
+)
+
 /**
  * Repository interface for Google Drive cloud synchronization.
  */
@@ -32,8 +37,12 @@ interface SyncRepository {
     suspend fun restoreFromCloud(): SyncResult<List<DailyPlanner>>
 
     /**
-     * Nightly retention clean-up: Ensures data older than retentionDays is backed up in Google Drive,
-     * then purges local records so that only the rolling retention window lives on device.
+     * Retrieves metadata for the latest cloud backup stored on Google Drive.
+     */
+    suspend fun getLastBackupMetadata(): BackupMetadata? = null
+
+    /**
+     * Nightly retention clean-up: Deprecated in permanent retention policy.
      */
     suspend fun purgeOldLocalData(retentionDays: Int = 7): Result<Int>
 }

@@ -8,10 +8,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+import com.dialy.app.core.util.DefaultDispatcherProvider
+import com.dialy.app.core.util.DispatcherProvider
+
 /**
  * Implementation of AuthRepository managing user authentication state.
  */
-class AuthRepositoryImpl : AuthRepository {
+class AuthRepositoryImpl(
+    private val dispatchers: DispatcherProvider = DefaultDispatcherProvider()
+) : AuthRepository {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unauthenticated)
     override val authState: StateFlow<AuthState> = _authState.asStateFlow()

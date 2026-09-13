@@ -2,6 +2,7 @@ package com.dialy.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,7 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import kotlinx.coroutines.launch
 import com.dialy.app.core.auth.AuthState
@@ -20,12 +24,16 @@ import com.dialy.app.data.local.database.AppDatabase
 import com.dialy.app.data.remote.auth.AuthRepositoryImpl
 import com.dialy.app.data.remote.auth.GoogleAuthManager
 import com.dialy.app.data.remote.drive.DriveDataSource
+import com.dialy.app.data.remote.drive.GoogleDriveDataSourceImpl
 import com.dialy.app.data.remote.drive.RemoteDriveFile
 import com.dialy.app.data.repository.PlannerRepositoryImpl
 import com.dialy.app.data.repository.SyncRepositoryImpl
+import com.dialy.app.core.notification.AppNotificationManager
+import com.dialy.app.presentation.account.AccountBackupScreen
 import com.dialy.app.presentation.auth.AuthScreen
 import com.dialy.app.presentation.dayplanner.DayPlannerScreen
 import com.dialy.app.presentation.dayplanner.DayPlannerViewModel
+import com.dialy.app.presentation.notifications.NotificationsScreen
 import com.dialy.app.presentation.theme.DiaryColors
 import com.dialy.app.presentation.theme.DiaryTheme
 
@@ -41,13 +49,15 @@ class MainActivity : ComponentActivity() {
         // Request maximum available display refresh rate (120Hz/90Hz/144Hz)
         enableHighRefreshRate()
 
-        googleAuthManager = GoogleAuthManager(this)
-        authRepository = AuthRepositoryImpl()
-
-        val lastUser = googleAuthManager.getLastSignedInUser()
-        val initialProfile = lastUser?.email ?: "guest"
-        val database = AppDatabase.getInstance(applicationContext, initialProfile)
+        // Core Infrastructure initialization
         val dispatchers = DefaultDispatcherProvider()
+        AppNotificationManager.initialize(applicationContext)
+        googleAuthManager = GoogleAuthManager(applicationContext)
+        authRepository = AuthRepositoryImpl(dispatchers)
+
+        // Initialize SQLite Room database
+        val initialProfile = googleAuthManager.getLastSignedInUser()?.email ?: "guest"
+        val database = AppDatabase.getInstance(applicationContext, initialProfile)
 
         val plannerRepository = PlannerRepositoryImpl(
             plannerDao = database.dailyPlannerDao(),
@@ -62,39 +72,11 @@ class MainActivity : ComponentActivity() {
         )
         plannerRepository.switchProfile(initialProfile)
 
-        // Initialize Drive Data Source (ready for Google Drive AppData folder operations)
-        val driveDataSource = object : DriveDataSource {
-            // Partition cloud files per user profile to guarantee zero cross-account sync contamination
-            private val userCaches = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, String>>()
-
-            private fun getActiveUserCache(): MutableMap<String, String> {
-                val currentEmail = authRepository.currentUser?.email?.trim()?.lowercase() ?: "guest"
-                return userCaches.computeIfAbsent(currentEmail) {
-                    java.util.concurrent.ConcurrentHashMap()
-                }
-            }
-
-            override suspend fun uploadFile(fileName: String, content: String): Result<String> {
-                getActiveUserCache()[fileName] = content
-                return Result.success(fileName)
-            }
-
-            override suspend fun downloadFile(fileName: String): Result<String?> {
-                return Result.success(getActiveUserCache()[fileName])
-            }
-
-            override suspend fun listFiles(): Result<List<RemoteDriveFile>> {
-                val cache = getActiveUserCache()
-                return Result.success(cache.map {
-                    RemoteDriveFile(id = it.key, name = it.key, modifiedTime = System.currentTimeMillis())
-                })
-            }
-
-            override suspend fun deleteFile(fileName: String): Result<Unit> {
-                getActiveUserCache().remove(fileName)
-                return Result.success(Unit)
-            }
-        }
+        // Initialize Real Google Drive Data Source (Google Drive REST API appDataFolder)
+        val driveDataSource = GoogleDriveDataSourceImpl(
+            context = applicationContext,
+            dispatchers = dispatchers
+        )
 
         val syncRepository = SyncRepositoryImpl(
             plannerRepository = plannerRepository,
@@ -157,6 +139,26 @@ class MainActivity : ComponentActivity() {
             // Gracefully ignore if vendor ROM limits display mode override
         }
     }
+
+    override fun onPause() {
+        super.onPause()
+        if (::viewModel.isInitialized) {
+            viewModel.flushSyncToDb()
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::viewModel.isInitialized) {
+            viewModel.flushSyncToDb()
+        }
+    }
+}
+
+enum class AppScreen {
+    PLANNER,
+    ACCOUNT_BACKUP,
+    NOTIFICATIONS
 }
 
 @Composable
@@ -167,6 +169,7 @@ fun AppNavigation(
     val authState by viewModel.authState.collectAsState()
     val isGuestMode by viewModel.isGuestMode.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    var currentScreen by remember { mutableStateOf(AppScreen.PLANNER) }
 
     // Google Sign-In Activity Result Launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
@@ -175,22 +178,66 @@ fun AppNavigation(
         val authResult = googleAuthManager.handleSignInResult(result.data)
         authResult.onSuccess { authUser ->
             viewModel.onGoogleSignInSuccess(authUser)
+            currentScreen = AppScreen.PLANNER
         }.onFailure { error ->
             viewModel.onGoogleSignInFailure(error.message ?: "Google Sign-In failed")
         }
     }
 
-    // If authenticated OR continuing as guest -> show Day Planner
+    // If authenticated OR continuing as guest
     if (authState is AuthState.Authenticated || isGuestMode) {
-        DayPlannerScreen(
-            viewModel = viewModel,
-            onSignOutClick = {
-                coroutineScope.launch {
-                    googleAuthManager.signOut()
-                    viewModel.onSignOut()
-                }
+        when (currentScreen) {
+            AppScreen.PLANNER -> {
+                DayPlannerScreen(
+                    viewModel = viewModel,
+                    onNavigateToAccount = {
+                        currentScreen = AppScreen.ACCOUNT_BACKUP
+                    },
+                    onNavigateToNotifications = {
+                        currentScreen = AppScreen.NOTIFICATIONS
+                    },
+                    onSignOutClick = {
+                        coroutineScope.launch {
+                            googleAuthManager.signOut()
+                            viewModel.onSignOut()
+                            currentScreen = AppScreen.PLANNER
+                        }
+                    }
+                )
             }
-        )
+            AppScreen.NOTIFICATIONS -> {
+                BackHandler {
+                    currentScreen = AppScreen.PLANNER
+                }
+
+                NotificationsScreen(
+                    onNavigateBack = { currentScreen = AppScreen.PLANNER }
+                )
+            }
+            AppScreen.ACCOUNT_BACKUP -> {
+                BackHandler {
+                    currentScreen = AppScreen.PLANNER
+                }
+
+                AccountBackupScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { currentScreen = AppScreen.PLANNER },
+                    onSignInClick = {
+                        coroutineScope.launch {
+                            googleAuthManager.signOut()
+                            googleSignInLauncher.launch(googleAuthManager.signInIntent)
+                        }
+                    },
+                    onSignOutClick = {
+                        coroutineScope.launch {
+                            googleAuthManager.signOut()
+                            viewModel.onSignOut()
+                            currentScreen = AppScreen.PLANNER
+                        }
+                    }
+                )
+            }
+        }
     } else {
         // First time / unauthenticated -> Show Google Sign In screen with Drive permission details
         AuthScreen(
@@ -204,6 +251,7 @@ fun AppNavigation(
             },
             onSkipGuestClick = {
                 viewModel.onSkipGuestMode()
+                currentScreen = AppScreen.PLANNER
             }
         )
     }

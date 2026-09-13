@@ -32,9 +32,11 @@ class DailySyncWorker(
         Log.d(TAG, "Starting Nightly 11:00 PM IST Sync & Purge routine...")
 
         return try {
-            val database = AppDatabase.getInstance(applicationContext)
+            val account = com.google.android.gms.auth.api.signin.GoogleSignIn.getLastSignedInAccount(applicationContext)
+            val profileId = account?.email ?: "guest"
+            val database = AppDatabase.getInstance(applicationContext, profileId)
             val dispatchers = DefaultDispatcherProvider()
-            val authRepository = AuthRepositoryImpl()
+            val authRepository = AuthRepositoryImpl(dispatchers)
 
             val plannerRepository = PlannerRepositoryImpl(
                 plannerDao = database.dailyPlannerDao(),
@@ -44,33 +46,15 @@ class DailySyncWorker(
                 selfCareDao = database.selfCareDao(),
                 reminderDao = database.reminderDao(),
                 gratitudeDao = database.gratitudeDao(),
+                dispatchers = dispatchers,
+                context = applicationContext
+            )
+            plannerRepository.switchProfile(profileId)
+
+            val driveDataSource = com.dialy.app.data.remote.drive.GoogleDriveDataSourceImpl(
+                context = applicationContext,
                 dispatchers = dispatchers
             )
-
-            // Local cache or Drive data source
-            val driveDataSource = object : DriveDataSource {
-                private val cache = mutableMapOf<String, String>()
-
-                override suspend fun uploadFile(fileName: String, content: String): kotlin.Result<String> {
-                    cache[fileName] = content
-                    return kotlin.Result.success(fileName)
-                }
-
-                override suspend fun downloadFile(fileName: String): kotlin.Result<String?> {
-                    return kotlin.Result.success(cache[fileName])
-                }
-
-                override suspend fun listFiles(): kotlin.Result<List<RemoteDriveFile>> {
-                    return kotlin.Result.success(cache.map {
-                        RemoteDriveFile(id = it.key, name = it.key, modifiedTime = System.currentTimeMillis())
-                    })
-                }
-
-                override suspend fun deleteFile(fileName: String): kotlin.Result<Unit> {
-                    cache.remove(fileName)
-                    return kotlin.Result.success(Unit)
-                }
-            }
 
             val syncRepository = SyncRepositoryImpl(
                 plannerRepository = plannerRepository,
@@ -84,24 +68,16 @@ class DailySyncWorker(
             val todayIst = LocalDate.now(istZone)
             val todayStr = DateUtils.toIsoString(todayIst)
 
-            // Step 1: Sync today's planner to Google Drive
+            // Step 1: Upload full backup snapshot to Google Drive
+            Log.d(TAG, "Uploading full backup snapshot to Drive...")
+            syncRepository.backupToCloud()
+
+            // Step 2: Sync today's planner and all pending days to Google Drive
             Log.d(TAG, "Syncing today ($todayStr) to Drive...")
             syncRepository.syncPlanner(todayStr)
-
-            // Step 2: Sync all pending days
-            Log.d(TAG, "Syncing all pending changes to Drive...")
             syncRepository.syncAll()
 
-            // Step 3: Purge data older than 7 days (date <= today - 7 days)
-            Log.d(TAG, "Purging local data older than 7 days (keeping only Drive copies)...")
-            val purgeResult = syncRepository.purgeOldLocalData(retentionDays = 7)
-
-            purgeResult.onSuccess { purgedCount ->
-                Log.d(TAG, "Nightly routine completed: purged $purgedCount old local days from device.")
-            }.onFailure { error ->
-                Log.e(TAG, "Nightly purge error: ${error.message}", error)
-            }
-
+            Log.d(TAG, "Daily backup routine completed successfully. All local data retained permanently.")
             Result.success()
         } catch (e: Exception) {
             Log.e(TAG, "DailySyncWorker execution failed: ${e.message}", e)

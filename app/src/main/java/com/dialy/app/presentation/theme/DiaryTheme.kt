@@ -89,6 +89,8 @@ private val LightColorScheme = lightColorScheme(
     onSurface = DiaryColors.TextPrimary,
     surfaceVariant = DiaryColors.SubtleCard,
     onSurfaceVariant = DiaryColors.TextSecondary,
+    inverseSurface = DiaryColors.TextPrimary,
+    inverseOnSurface = Color.White,
     outline = DiaryColors.BorderSubtle
 )
 

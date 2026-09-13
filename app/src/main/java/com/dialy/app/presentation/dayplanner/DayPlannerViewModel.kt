@@ -1,10 +1,13 @@
 package com.dialy.app.presentation.dayplanner
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.runBlocking
 import com.dialy.app.core.auth.AuthState
 import com.dialy.app.core.auth.AuthUser
+import com.dialy.app.core.notification.AppNotificationManager
 import com.dialy.app.core.pdf.DiaryPdfGenerator
 import com.dialy.app.core.pdf.PdfExportResult
 import com.dialy.app.core.sync.SyncResult
@@ -22,6 +25,7 @@ import com.dialy.app.domain.model.ScheduleItem
 import com.dialy.app.domain.model.SelfCareItem
 import com.dialy.app.domain.model.TodoItem
 import com.dialy.app.domain.repository.AuthRepository
+import com.dialy.app.domain.repository.BackupMetadata
 import com.dialy.app.domain.repository.PlannerRepository
 import com.dialy.app.domain.repository.SyncRepository
 import kotlinx.coroutines.CoroutineScope
@@ -58,6 +62,16 @@ class DayPlannerViewModel(
     private val _isExportingPdf = MutableStateFlow(false)
     val isExportingPdf: StateFlow<Boolean> = _isExportingPdf.asStateFlow()
 
+    // --- Google Drive Backup & Restore State ---
+    private val _lastBackupInfo = MutableStateFlow<BackupMetadata?>(null)
+    val lastBackupInfo: StateFlow<BackupMetadata?> = _lastBackupInfo.asStateFlow()
+
+    private val _isBackingUp = MutableStateFlow(false)
+    val isBackingUp: StateFlow<Boolean> = _isBackingUp.asStateFlow()
+
+    private val _isRestoring = MutableStateFlow(false)
+    val isRestoring: StateFlow<Boolean> = _isRestoring.asStateFlow()
+
     // --- In-Memory Short-Term Cache ---
     // All typing and user edits update this in-memory cache instantly (0ms latency, zero jitter).
     // Writes to the local Room database are debounced and executed in the background.
@@ -75,6 +89,7 @@ class DayPlannerViewModel(
 
     init {
         observePlannerForDate(_currentDate.value)
+        refreshLastBackupInfo()
     }
 
     private fun observePlannerForDate(date: String) {
@@ -99,16 +114,16 @@ class DayPlannerViewModel(
         _planner.value = updated
         hasUnsavedCache = true
 
-        // Debounce write to local DB (1000ms of inactivity after user stops typing)
+        // Fast debounce write to local DB (350ms of inactivity after user stops typing)
         dbFlushJob?.cancel()
         dbFlushJob = viewModelScope.launch {
-            delay(1000L)
+            delay(350L)
             flushCacheToDb()
         }
     }
 
     /**
-     * Immediately flushes the in-memory cache to the local database.
+     * Immediately flushes the in-memory cache to the local database asynchronously.
      */
     suspend fun flushCacheToDb() {
         dbFlushJob?.cancel()
@@ -119,6 +134,26 @@ class DayPlannerViewModel(
                 hasUnsavedCache = false
             } catch (e: Exception) {
                 _errorMessage.value = "Failed to save planner: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Synchronously and immediately commits the in-memory cache to SQLite Room database.
+     * Guaranteed to persist data before app closure, pause, back, home, or task-kill.
+     */
+    fun flushSyncToDb() {
+        dbFlushJob?.cancel()
+        if (hasUnsavedCache) {
+            val toSave = _planner.value ?: return
+            hasUnsavedCache = false
+            try {
+                runBlocking(Dispatchers.IO) {
+                    plannerRepository.savePlanner(toSave)
+                }
+                Log.d("DayPlannerVM", "Successfully saved planner to SQLite on app lifecycle event")
+            } catch (e: Exception) {
+                Log.e("DayPlannerVM", "Error flushing cache on app close: ${e.message}", e)
             }
         }
     }
@@ -213,7 +248,6 @@ class DayPlannerViewModel(
             )
             current.copy(todos = current.todos + newTodo)
         }
-        _statusMessage.value = "Added task: $title"
     }
 
     fun onToggleTodo(id: String, isCompleted: Boolean) {
@@ -230,7 +264,6 @@ class DayPlannerViewModel(
                 todos = current.todos.filter { it.id != id }
             )
         }
-        _statusMessage.value = "Deleted task"
     }
 
     fun onUpdateScheduleSlot(slot: String, activity: String) {
@@ -311,7 +344,8 @@ class DayPlannerViewModel(
 
     fun onSelectMood(moodType: MoodType) {
         updateCacheAndScheduleSave { current ->
-            current.copy(mood = Mood(type = moodType))
+            val nextMood = if (current.mood?.type == moodType) null else Mood(type = moodType)
+            current.copy(mood = nextMood)
         }
     }
 
@@ -400,43 +434,128 @@ class DayPlannerViewModel(
         viewModelScope.launch {
             try {
                 flushCacheToDb() // Guarantee disk has all current user edits before sync
-                val result = syncRepository?.syncPlanner(_currentDate.value)
-                when (result) {
-                    is SyncResult.Success -> _statusMessage.value = "Drive sync complete"
-                    is SyncResult.Error -> _errorMessage.value = "Sync error: ${result.message}"
-                    is SyncResult.Offline -> _statusMessage.value = "Offline: changes queued"
-                    is SyncResult.NotAuthenticated -> _statusMessage.value = "Sign in to enable Drive sync"
-                    is SyncResult.Conflict -> _statusMessage.value = "Sync resolved: ${result.message}"
-                    null -> {}
-                }
-            } catch (e: Exception) {
-                _errorMessage.value = "Sync failed: ${e.message}"
+                syncRepository?.syncPlanner(_currentDate.value)
+            } catch (_: Exception) {
+                // Background sync fails gracefully without disturbing user interaction
             }
         }
     }
 
-    // --- PDF Export Action ---
+    // --- Google Drive Full Backup & Restore Actions ---
 
-    fun onExportPdf(context: Context) {
+    fun refreshLastBackupInfo() {
+        viewModelScope.launch {
+            try {
+                val meta = syncRepository?.getLastBackupMetadata()
+                _lastBackupInfo.value = meta
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun onManualBackupToCloud(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            _isBackingUp.value = true
+            _statusMessage.value = "Backing up to Google Drive..."
+            try {
+                flushCacheToDb() // Flush any pending edits to disk first
+                val result = syncRepository?.backupToCloud()
+                when (result) {
+                    is SyncResult.Success -> {
+                        _statusMessage.value = "Backup created successfully"
+                        AppNotificationManager.postSuccess("Google Drive Backup", "Backup created and uploaded to Google Drive successfully")
+                        refreshLastBackupInfo()
+                        onComplete(true, "Backup uploaded to Google Drive successfully")
+                    }
+                    is SyncResult.Error -> {
+                        _errorMessage.value = result.message
+                        AppNotificationManager.postError("Google Drive Backup", result.message)
+                        onComplete(false, result.message)
+                    }
+                    is SyncResult.NotAuthenticated -> {
+                        _errorMessage.value = "Please sign in to backup to Google Drive"
+                        AppNotificationManager.postWarning("Google Drive Backup", "Please sign in to backup to Google Drive")
+                        onComplete(false, "Not authenticated")
+                    }
+                    else -> {
+                        AppNotificationManager.postError("Google Drive Backup", "Backup failed")
+                        onComplete(false, "Backup failed")
+                    }
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Backup failed: ${e.message}"
+                AppNotificationManager.postError("Google Drive Backup", "Backup failed: ${e.message}")
+                onComplete(false, e.message ?: "Unknown error")
+            } finally {
+                _isBackingUp.value = false
+            }
+        }
+    }
+
+    fun onRestoreFromCloud(onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        viewModelScope.launch {
+            _isRestoring.value = true
+            _statusMessage.value = "Restoring data from Google Drive..."
+            try {
+                val result = syncRepository?.restoreFromCloud()
+                when (result) {
+                    is SyncResult.Success -> {
+                        _statusMessage.value = "Restored ${result.data.size} entries from Google Drive"
+                        AppNotificationManager.postSuccess("Google Drive Restore", "Restored ${result.data.size} planner entries from Google Drive")
+                        hasUnsavedCache = false
+                        _planner.value = null
+                        observePlannerForDate(_currentDate.value)
+                        refreshLastBackupInfo()
+                        onComplete(true, "Restored ${result.data.size} planner entries from Google Drive")
+                    }
+                    is SyncResult.Error -> {
+                        _errorMessage.value = result.message
+                        AppNotificationManager.postError("Google Drive Restore", result.message)
+                        onComplete(false, result.message)
+                    }
+                    is SyncResult.NotAuthenticated -> {
+                        _errorMessage.value = "Please sign in to restore from Google Drive"
+                        AppNotificationManager.postWarning("Google Drive Restore", "Please sign in to restore from Google Drive")
+                        onComplete(false, "Not authenticated")
+                    }
+                    else -> {
+                        AppNotificationManager.postError("Google Drive Restore", "Restore failed")
+                        onComplete(false, "Restore failed")
+                    }
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Restore failed: ${e.message}"
+                AppNotificationManager.postError("Google Drive Restore", "Restore failed: ${e.message}")
+                onComplete(false, e.message ?: "Unknown error")
+            } finally {
+                _isRestoring.value = false
+            }
+        }
+    }
+
+    // --- Diary Preview Action (Eye Icon) ---
+
+    fun onPreviewDiary(context: Context) {
         viewModelScope.launch {
             _isExportingPdf.value = true
-            _statusMessage.value = "Generating diary PDF..."
             try {
-                flushCacheToDb() // Ensure cache is committed
+                flushSyncToDb() // Ensure latest in-memory cache is committed to database
                 val currentPlanner = _planner.value ?: return@launch
                 val result = DiaryPdfGenerator.generatePdf(context.applicationContext, currentPlanner)
                 result.onSuccess { exportResult ->
-                    _pdfExportResult.value = exportResult
-                    _statusMessage.value = "PDF exported: ${exportResult.destinationDescription}"
+                    DiaryPdfGenerator.openPdfViewer(context, exportResult.uri)
                 }.onFailure { e ->
-                    _errorMessage.value = "Failed to export PDF: ${e.message}"
+                    AppNotificationManager.postWarning("Diary Preview", "Failed to open preview: ${e.message}")
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "Failed to export PDF: ${e.message}"
+                AppNotificationManager.postWarning("Diary Preview", "Failed to open preview: ${e.message}")
             } finally {
                 _isExportingPdf.value = false
             }
         }
+    }
+
+    fun onExportPdf(context: Context) {
+        onPreviewDiary(context)
     }
 
     fun clearPdfExportResult() {
@@ -450,16 +569,6 @@ class DayPlannerViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        dbFlushJob?.cancel()
-        if (hasUnsavedCache) {
-            val toSave = _planner.value
-            if (toSave != null) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        plannerRepository.savePlanner(toSave)
-                    } catch (_: Exception) {}
-                }
-            }
-        }
+        flushSyncToDb()
     }
 }

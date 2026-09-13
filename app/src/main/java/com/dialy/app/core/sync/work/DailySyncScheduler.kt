@@ -11,22 +11,73 @@ import java.time.Duration
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "DailySyncScheduler"
-private const val UNIQUE_WORK_NAME = "Nightly11PMSyncAndPurgeWork"
+private const val UNIQUE_WORK_NAME = "DailyDriveAutoBackupWork"
+private const val PREFS_NAME = "diary_auto_backup_prefs"
+private const val KEY_HOUR = "backup_hour"
+private const val KEY_MINUTE = "backup_minute"
+private const val KEY_ENABLED = "backup_enabled"
 
 /**
- * Schedules the recurring background job every night at 11:00 PM IST (23:00 Asia/Kolkata).
+ * Manages scheduling and timing for Google Drive automated daily backups.
  */
 object DailySyncScheduler {
 
+    const val DEFAULT_HOUR = 23
+    const val DEFAULT_MINUTE = 0
+
+    fun isAutoBackupEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_ENABLED, true)
+    }
+
+    fun getScheduledHour(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_HOUR, DEFAULT_HOUR)
+    }
+
+    fun getScheduledMinute(context: Context): Int {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_MINUTE, DEFAULT_MINUTE)
+    }
+
+    fun getFormattedScheduledTime(context: Context): String {
+        val hour = getScheduledHour(context)
+        val minute = getScheduledMinute(context)
+        val time = LocalTime.of(hour, minute)
+        return time.format(DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()))
+    }
+
     /**
-     * Enqueues unique periodic work for 11:00 PM IST daily sync and 7-day retention purge.
+     * Updates user's preferred backup timing and reschedules background WorkManager accordingly.
      */
-    fun scheduleNightlySync(context: Context) {
-        val initialDelay = calculateInitialDelayTo11PmIst()
-        Log.d(TAG, "Scheduling 11:00 PM IST nightly sync. Initial delay: ${initialDelay.toMinutes()} minutes")
+    fun scheduleDailySync(
+        context: Context,
+        hour: Int = getScheduledHour(context),
+        minute: Int = getScheduledMinute(context),
+        enabled: Boolean = isAutoBackupEnabled(context)
+    ) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putInt(KEY_HOUR, hour)
+            .putInt(KEY_MINUTE, minute)
+            .putBoolean(KEY_ENABLED, enabled)
+            .apply()
+
+        val workManager = WorkManager.getInstance(context)
+
+        if (!enabled) {
+            Log.d(TAG, "Auto-backup disabled by user. Cancelling unique work '$UNIQUE_WORK_NAME'")
+            workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
+            return
+        }
+
+        val initialDelay = calculateInitialDelay(hour, minute)
+        Log.d(TAG, "Rescheduling daily backup for $hour:${minute.toString().padStart(2, '0')}. Delay: ${initialDelay.toMinutes()} minutes")
 
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -40,28 +91,37 @@ object DailySyncScheduler {
             .setConstraints(constraints)
             .build()
 
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        workManager.enqueueUniquePeriodicWork(
             UNIQUE_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             periodicWorkRequest
         )
     }
 
     /**
-     * Calculates the duration until the next 11:00 PM in Indian Standard Time (Asia/Kolkata).
+     * Initial startup scheduler call.
      */
-    fun calculateInitialDelayTo11PmIst(): Duration {
-        val istZone = ZoneId.of("Asia/Kolkata")
-        val nowIst = LocalDateTime.now(istZone)
-        val targetTimeIst = LocalTime.of(23, 0) // 11:00 PM IST
+    fun scheduleNightlySync(context: Context) {
+        if (isAutoBackupEnabled(context)) {
+            scheduleDailySync(context)
+        }
+    }
 
-        var nextTarget = nowIst.with(targetTimeIst)
-        if (nowIst.isAfter(nextTarget)) {
-            // If already past 11:00 PM today, target 11:00 PM tomorrow
+    /**
+     * Calculates the duration from now until the target hour and minute in local system time.
+     */
+    fun calculateInitialDelay(targetHour: Int, targetMinute: Int): Duration {
+        val zone = ZoneId.systemDefault()
+        val now = LocalDateTime.now(zone)
+        val targetTime = LocalTime.of(targetHour, targetMinute)
+
+        var nextTarget = now.with(targetTime)
+        if (now.isAfter(nextTarget)) {
+            // Already passed today, schedule for tomorrow
             nextTarget = nextTarget.plusDays(1)
         }
 
-        val duration = Duration.between(nowIst, nextTarget)
+        val duration = Duration.between(now, nextTarget)
         return if (duration.isNegative) Duration.ZERO else duration
     }
 }

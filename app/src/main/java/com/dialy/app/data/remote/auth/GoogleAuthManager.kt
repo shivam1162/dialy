@@ -33,11 +33,12 @@ class GoogleAuthManager(
         "209256810606-9tmkauf1lotds835iog7ooq0jgt240dt.apps.googleusercontent.com"
     }
 
-    // Standard Google Sign-In with Firebase Web Client ID
+    // Standard Google Sign-In with Firebase Web Client ID and Google Drive Scopes
     private val gso: GoogleSignInOptions = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
         .requestIdToken(webClientId)
         .requestEmail()
         .requestProfile()
+        .requestScopes(Scope(DriveScopes.DRIVE_APPDATA), Scope(DriveScopes.DRIVE_FILE))
         .build()
 
     private val googleSignInClient: GoogleSignInClient = GoogleSignIn.getClient(context, gso)

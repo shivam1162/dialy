@@ -161,10 +161,19 @@ class SyncRepositoryImpl(
             val allPlanners = plannerRepository.getAllPlannersOnce()
             val backupJson = json.encodeToString(allPlanners)
 
-            driveDataSource.uploadFile("smart_diary_full_backup.json", backupJson)
-            SyncResult.Success(Unit, "Full backup uploaded to Google Drive.")
+            val uploadResult = driveDataSource.uploadFile("smart_diary_full_backup.json", backupJson)
+            uploadResult.fold(
+                onSuccess = {
+                    SyncResult.Success(Unit, "Full backup uploaded to Google Drive.")
+                },
+                onFailure = { error ->
+                    val cleanMsg = cleanErrorMessage(error)
+                    SyncResult.Error("Cloud backup failed: $cleanMsg", error)
+                }
+            )
         } catch (e: Exception) {
-            SyncResult.Error("Cloud backup failed: ${e.message}", e)
+            val cleanMsg = cleanErrorMessage(e)
+            SyncResult.Error("Cloud backup failed: $cleanMsg", e)
         }
     }
 
@@ -176,55 +185,67 @@ class SyncRepositoryImpl(
 
         try {
             val backupResult = driveDataSource.downloadFile("smart_diary_full_backup.json")
+            if (backupResult.isFailure) {
+                val error = backupResult.exceptionOrNull()
+                val cleanMsg = cleanErrorMessage(error)
+                return@withContext SyncResult.Error("Cloud restore failed: $cleanMsg", error)
+            }
+
             val content = backupResult.getOrNull()
                 ?: return@withContext SyncResult.Error("No cloud backup found on Google Drive.")
 
             val planners = json.decodeFromString<List<DailyPlanner>>(content)
+
+            // 1. Wipe all local data for this account before restoring
+            plannerRepository.clearAllLocalData()
+
+            // 2. Insert all planners from Google Drive backup
             for (planner in planners) {
                 plannerRepository.savePlanner(planner.copy(syncState = SyncState.SYNCED))
             }
 
             SyncResult.Success(planners, "Restored ${planners.size} planners from Google Drive.")
         } catch (e: Exception) {
-            SyncResult.Error("Restore from cloud failed: ${e.message}", e)
+            val cleanMsg = cleanErrorMessage(e)
+            SyncResult.Error("Restore from cloud failed: $cleanMsg", e)
+        }
+    }
+
+    override suspend fun getLastBackupMetadata(): com.dialy.app.domain.repository.BackupMetadata? = withContext(dispatchers.io) {
+        val auth = authRepository.checkAuthStatus()
+        if (auth !is AuthState.Authenticated) return@withContext null
+        try {
+            val filesResult = driveDataSource.listFiles()
+            val files = filesResult.getOrNull() ?: return@withContext null
+            val backupFile = files.find { it.name == "smart_diary_full_backup.json" } ?: return@withContext null
+            val content = driveDataSource.downloadFile("smart_diary_full_backup.json").getOrNull()
+            val count = if (content != null) {
+                try { json.decodeFromString<List<DailyPlanner>>(content).size } catch (e: Exception) { 0 }
+            } else 0
+            com.dialy.app.domain.repository.BackupMetadata(
+                lastBackupTime = backupFile.modifiedTime,
+                plannerCount = count
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun cleanErrorMessage(e: Throwable?): String {
+        val raw = e?.message ?: "Unknown error"
+        return when {
+            raw.contains("SERVICE_DISABLED", ignoreCase = true) ->
+                "Google Drive API is disabled in your Google Cloud Console project. Enable it at: console.developers.google.com/apis/api/drive.googleapis.com"
+            raw.contains("ACCESS_TOKEN_SCOPE_INSUFFICIENT", ignoreCase = true) ->
+                "Drive permission not granted. Please sign out and sign in again to grant Drive access."
+            raw.contains("UserRecoverableAuthIOException", ignoreCase = true) ->
+                "Drive authorization required. Please sign in again."
+            else -> raw
         }
     }
 
     override suspend fun purgeOldLocalData(retentionDays: Int): Result<Int> = withContext(dispatchers.io) {
-        try {
-            val istZone = java.time.ZoneId.of("Asia/Kolkata")
-            val today = java.time.LocalDate.now(istZone)
-            val cutoffDate = today.minusDays(retentionDays.toLong())
-            val cutoffDateStr = DateUtils.toIsoString(cutoffDate)
-
-            // 1. Get all local planners older than the retention window
-            val allPlanners = plannerRepository.getAllPlannersOnce()
-            val oldPlanners = allPlanners.filter { it.date <= cutoffDateStr }
-
-            var purgedCount = 0
-            for (oldPlanner in oldPlanners) {
-                val date = oldPlanner.date
-                val fullPlanner = plannerRepository.getPlanner(date) ?: continue
-
-                // 2. Verify that this planner exists in Google Drive
-                val fileName = "planner_$date.json"
-                val remoteCheck = driveDataSource.downloadFile(fileName)
-                val existsOnDrive = remoteCheck.getOrNull() != null
-
-                if (!existsOnDrive) {
-                    // Upload to Drive first before purging
-                    val payload = json.encodeToString(fullPlanner.copy(syncState = SyncState.SYNCED))
-                    driveDataSource.uploadFile(fileName, payload)
-                }
-
-                // 3. Purge from local Room database
-                plannerRepository.deletePlanner(date)
-                purgedCount++
-            }
-
-            Result.success(purgedCount)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        // Permanent retention policy: local data is kept permanently on device and never purged
+        Result.success(0)
     }
 }
