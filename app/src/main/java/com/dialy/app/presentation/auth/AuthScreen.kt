@@ -165,33 +165,44 @@ fun AuthScreen(
                     Spacer(modifier = Modifier.height(14.dp))
                 }
 
-                // Native Google Sign In Button
+                // Official Google Sign In Button
                 Button(
                     onClick = onSignInClick,
                     enabled = authState !is AuthState.Loading,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
+                        .height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = DiaryColors.TextPrimary,
-                        contentColor = Color.White
-                    )
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF3C4043)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDADCE0)),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 1.dp, pressedElevation = 3.dp)
                 ) {
                     if (authState is AuthState.Loading) {
                         CircularProgressIndicator(
-                            color = Color.White,
-                            modifier = Modifier.size(20.dp),
+                            color = DiaryColors.GoldAccent,
+                            modifier = Modifier.size(22.dp),
                             strokeWidth = 2.dp
                         )
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("G", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = DiaryColors.GoldAccent)
-                            Spacer(modifier = Modifier.width(10.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_google_logo),
+                                contentDescription = "Google Logo",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = "Sign In with Google",
+                                text = "Sign in with Google",
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 15.sp,
+                                color = Color(0xFF3C4043)
                             )
                         }
                     }
