@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Request maximum available display refresh rate (120Hz/90Hz/144Hz)
+        enableHighRefreshRate()
+
         googleAuthManager = GoogleAuthManager(this)
         authRepository = AuthRepositoryImpl()
 
@@ -111,6 +114,35 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Enables maximum supported display refresh rate (e.g. 120Hz/90Hz/144Hz) for ultra-smooth UI.
+     */
+    private fun enableHighRefreshRate() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val display = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    display
+                } else {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay
+                }
+                val supportedModes = display?.supportedModes ?: return
+                // Pick the mode with the maximum refresh rate (e.g. 120Hz, 144Hz, 90Hz)
+                val highestRefreshRateMode = supportedModes.maxByOrNull { it.refreshRate }
+                if (highestRefreshRateMode != null && highestRefreshRateMode.refreshRate >= 60f) {
+                    window.attributes = window.attributes.apply {
+                        preferredDisplayModeId = highestRefreshRateMode.modeId
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                            preferredRefreshRate = highestRefreshRateMode.refreshRate
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Gracefully ignore if vendor ROM limits display mode override
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.dialy.app.domain.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 /**
@@ -20,6 +21,7 @@ enum class MoodType {
 /**
  * Structured mood entry for a daily planner.
  */
+@Immutable
 @Serializable
 data class Mood(
     val type: MoodType,

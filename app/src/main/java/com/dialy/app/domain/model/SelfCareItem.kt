@@ -1,11 +1,13 @@
 package com.dialy.app.domain.model
 
+import androidx.compose.runtime.Immutable
 import com.dialy.app.core.util.IdGenerator
 import kotlinx.serialization.Serializable
 
 /**
  * Domain model for daily self-care checklist items.
  */
+@Immutable
 @Serializable
 data class SelfCareItem(
     val id: String = IdGenerator.generate(),

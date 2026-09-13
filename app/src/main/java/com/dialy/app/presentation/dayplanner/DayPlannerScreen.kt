@@ -77,7 +77,7 @@ fun DayPlannerScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // 1. Header Section (Date, Day of Week, Sync status, Account)
-                item {
+                item(key = "section_header", contentType = "header") {
                     HeaderSection(
                         currentDateString = currentDate,
                         syncState = planner?.syncState ?: SyncState.LOCAL_ONLY,
@@ -97,7 +97,7 @@ fun DayPlannerScreen(
                 }
 
                 // 2. Today's Focus
-                item {
+                item(key = "section_focus", contentType = "focus") {
                     TodaysFocusSection(
                         focus = planner?.focus ?: "",
                         onFocusChange = { viewModel.onUpdateFocus(it) }
@@ -105,7 +105,7 @@ fun DayPlannerScreen(
                 }
 
                 // 3. Top 3 Priorities
-                item {
+                item(key = "section_priorities", contentType = "priorities") {
                     TopPrioritiesSection(
                         priorities = planner?.topPriorities ?: emptyList(),
                         onUpdatePriority = { order, title, isCompleted ->
@@ -115,7 +115,7 @@ fun DayPlannerScreen(
                 }
 
                 // 4. To-Do List
-                item {
+                item(key = "section_todos", contentType = "todos") {
                     TodoListSection(
                         todos = planner?.todos ?: emptyList(),
                         onAddTodo = { viewModel.onAddTodo(it) },
@@ -125,7 +125,7 @@ fun DayPlannerScreen(
                 }
 
                 // 5. Daily Schedule
-                item {
+                item(key = "section_schedule", contentType = "schedule") {
                     ScheduleSection(
                         schedule = planner?.schedule ?: emptyList(),
                         onUpdateScheduleSlot = { slot, activity ->
@@ -135,7 +135,7 @@ fun DayPlannerScreen(
                 }
 
                 // 6. Self Care & Habits Checklist
-                item {
+                item(key = "section_selfcare", contentType = "selfcare") {
                     SelfCareSection(
                         selfCareItems = planner?.selfCare ?: emptyList(),
                         onToggleSelfCare = { id, isDone -> viewModel.onToggleSelfCare(id, isDone) }
@@ -143,7 +143,7 @@ fun DayPlannerScreen(
                 }
 
                 // 7. Mood Tracker
-                item {
+                item(key = "section_mood", contentType = "mood") {
                     MoodTrackerSection(
                         currentMood = planner?.mood,
                         onSelectMood = { viewModel.onSelectMood(it) }
@@ -151,7 +151,7 @@ fun DayPlannerScreen(
                 }
 
                 // 8. Daily Gratitude
-                item {
+                item(key = "section_gratitude", contentType = "gratitude") {
                     GratitudeSection(
                         gratitudeList = planner?.gratitude ?: emptyList(),
                         onAddGratitude = { viewModel.onAddGratitude(it) }
@@ -159,7 +159,7 @@ fun DayPlannerScreen(
                 }
 
                 // 9. End-of-Day Reflection
-                item {
+                item(key = "section_reflection", contentType = "reflection") {
                     ReflectionSection(
                         reflection = planner?.reflection ?: com.dialy.app.domain.model.Reflection(),
                         onUpdateReflection = { wentWell, improve, proud ->
@@ -169,7 +169,7 @@ fun DayPlannerScreen(
                 }
 
                 // 10. Notes & Ideas
-                item {
+                item(key = "section_notes", contentType = "notes") {
                     NotesIdeasSection(
                         notes = planner?.notes ?: "",
                         onNotesChange = { viewModel.onUpdateNotes(it) }
@@ -177,7 +177,7 @@ fun DayPlannerScreen(
                 }
 
                 // 11. Don't Forget / Reminders
-                item {
+                item(key = "section_reminders", contentType = "reminders") {
                     DontForgetSection(
                         reminders = planner?.dontForget ?: emptyList(),
                         onAddReminder = { viewModel.onAddReminder(it) },
@@ -187,14 +187,14 @@ fun DayPlannerScreen(
                 }
 
                 // 12. Daily Reminder & Affirmation Banner
-                item {
+                item(key = "section_affirmation", contentType = "affirmation") {
                     DailyReminderSection(
                         reminder = planner?.dailyReminder ?: "",
                         onReminderChange = { viewModel.onUpdateDailyReminder(it) }
                     )
                 }
 
-                item {
+                item(key = "section_bottom_spacer", contentType = "spacer") {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
             }

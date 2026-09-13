@@ -1,5 +1,6 @@
 package com.dialy.app.domain.model
 
+import androidx.compose.runtime.Immutable
 import com.dialy.app.core.sync.SyncState
 import com.dialy.app.core.util.IdGenerator
 import kotlinx.serialization.Serializable
@@ -7,6 +8,7 @@ import kotlinx.serialization.Serializable
 /**
  * Structured domain model representing a complete Daily Planner entry.
  */
+@Immutable
 @Serializable
 data class DailyPlanner(
     val date: String, // ISO-8601 "yyyy-MM-dd"
