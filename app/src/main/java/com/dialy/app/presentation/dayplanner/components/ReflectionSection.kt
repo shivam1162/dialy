@@ -13,10 +13,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -32,20 +28,6 @@ fun ReflectionSection(
     onUpdateReflection: (whatWentWell: String, whatCanImprove: String, proudOf: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var wentWell by remember { mutableStateOf(reflection.whatWentWell) }
-    var improve by remember { mutableStateOf(reflection.whatCanImprove) }
-    var proud by remember { mutableStateOf(reflection.proudOf) }
-
-    androidx.compose.runtime.LaunchedEffect(reflection.whatWentWell) {
-        if (reflection.whatWentWell != wentWell) wentWell = reflection.whatWentWell
-    }
-    androidx.compose.runtime.LaunchedEffect(reflection.whatCanImprove) {
-        if (reflection.whatCanImprove != improve) improve = reflection.whatCanImprove
-    }
-    androidx.compose.runtime.LaunchedEffect(reflection.proudOf) {
-        if (reflection.proudOf != proud) proud = reflection.proudOf
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -66,10 +48,9 @@ fun ReflectionSection(
         // Prompt 1: What went well
         ReflectionPromptField(
             label = "🌱 What went well today?",
-            value = wentWell,
+            value = reflection.whatWentWell,
             onValueChange = {
-                wentWell = it
-                onUpdateReflection(it, improve, proud)
+                onUpdateReflection(it, reflection.whatCanImprove, reflection.proudOf)
             },
             accentColor = DiaryColors.SageAccent
         )
@@ -79,10 +60,9 @@ fun ReflectionSection(
         // Prompt 2: What can I improve
         ReflectionPromptField(
             label = "💡 What could I improve tomorrow?",
-            value = improve,
+            value = reflection.whatCanImprove,
             onValueChange = {
-                improve = it
-                onUpdateReflection(wentWell, it, proud)
+                onUpdateReflection(reflection.whatWentWell, it, reflection.proudOf)
             },
             accentColor = DiaryColors.PeachAccent
         )
@@ -92,10 +72,9 @@ fun ReflectionSection(
         // Prompt 3: Proud of
         ReflectionPromptField(
             label = "💖 I'm proud of myself for...",
-            value = proud,
+            value = reflection.proudOf,
             onValueChange = {
-                proud = it
-                onUpdateReflection(wentWell, improve, it)
+                onUpdateReflection(reflection.whatWentWell, reflection.whatCanImprove, it)
             },
             accentColor = DiaryColors.RoseAccent
         )

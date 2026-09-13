@@ -1,9 +1,12 @@
 package com.dialy.app.presentation.dayplanner
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dialy.app.core.auth.AuthState
 import com.dialy.app.core.auth.AuthUser
+import com.dialy.app.core.pdf.DiaryPdfGenerator
+import com.dialy.app.core.pdf.PdfExportResult
 import com.dialy.app.core.sync.SyncResult
 import com.dialy.app.core.sync.SyncState
 import com.dialy.app.core.util.DateUtils
@@ -21,20 +24,16 @@ import com.dialy.app.domain.model.TodoItem
 import com.dialy.app.domain.repository.AuthRepository
 import com.dialy.app.domain.repository.PlannerRepository
 import com.dialy.app.domain.repository.SyncRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class DayPlannerViewModel(
     private val plannerRepository: PlannerRepository,
     private val authRepository: AuthRepository? = null,
@@ -53,58 +52,114 @@ class DayPlannerViewModel(
     private val _isGuestMode = MutableStateFlow(false)
     val isGuestMode: StateFlow<Boolean> = _isGuestMode.asStateFlow()
 
-    // Debounce job holders to ensure smooth typing with zero jitter/recomposition lag
-    private var focusDebounceJob: Job? = null
-    private val priorityDebounceJobs = mutableMapOf<Int, Job>()
-    private val scheduleDebounceJobs = mutableMapOf<String, Job>()
-    private var notesDebounceJob: Job? = null
-    private var reflectionDebounceJob: Job? = null
-    private var reminderDebounceJob: Job? = null
+    private val _pdfExportResult = MutableStateFlow<PdfExportResult?>(null)
+    val pdfExportResult: StateFlow<PdfExportResult?> = _pdfExportResult.asStateFlow()
 
-    val planner: StateFlow<DailyPlanner?> = _currentDate
-        .flatMapLatest { date ->
-            plannerRepository.getPlannerFlow(date)
-        }
-        .catch { e ->
-            _errorMessage.value = "Failed to load planner: ${e.message}"
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = null
-        )
+    private val _isExportingPdf = MutableStateFlow(false)
+    val isExportingPdf: StateFlow<Boolean> = _isExportingPdf.asStateFlow()
+
+    // --- In-Memory Short-Term Cache ---
+    // All typing and user edits update this in-memory cache instantly (0ms latency, zero jitter).
+    // Writes to the local Room database are debounced and executed in the background.
+    private val _planner = MutableStateFlow<DailyPlanner?>(null)
+    val planner: StateFlow<DailyPlanner?> = _planner.asStateFlow()
+
+    @Volatile
+    private var hasUnsavedCache: Boolean = false
+
+    private var dbFlushJob: Job? = null
+    private var plannerObservationJob: Job? = null
 
     val authState: StateFlow<AuthState> = authRepository?.authState
         ?: MutableStateFlow(AuthState.Unauthenticated).asStateFlow()
 
+    init {
+        observePlannerForDate(_currentDate.value)
+    }
+
+    private fun observePlannerForDate(date: String) {
+        plannerObservationJob?.cancel()
+        plannerObservationJob = viewModelScope.launch {
+            plannerRepository.getPlannerFlow(date).collect { dbPlanner ->
+                // Only take DB emission if we don't currently have unsaved in-memory user edits
+                if (!hasUnsavedCache) {
+                    _planner.value = dbPlanner ?: DailyPlanner.createDefault(date)
+                }
+            }
+        }
+    }
+
+    /**
+     * Updates the in-memory cache synchronously (0ms delay, no disk I/O),
+     * and schedules a debounced write to the Room database.
+     */
+    private fun updateCacheAndScheduleSave(updater: (DailyPlanner) -> DailyPlanner) {
+        val current = _planner.value ?: DailyPlanner.createDefault(_currentDate.value)
+        val updated = updater(current).copy(updatedAt = System.currentTimeMillis())
+        _planner.value = updated
+        hasUnsavedCache = true
+
+        // Debounce write to local DB (1000ms of inactivity after user stops typing)
+        dbFlushJob?.cancel()
+        dbFlushJob = viewModelScope.launch {
+            delay(1000L)
+            flushCacheToDb()
+        }
+    }
+
+    /**
+     * Immediately flushes the in-memory cache to the local database.
+     */
+    suspend fun flushCacheToDb() {
+        dbFlushJob?.cancel()
+        if (hasUnsavedCache) {
+            val toSave = _planner.value ?: return
+            try {
+                plannerRepository.savePlanner(toSave)
+                hasUnsavedCache = false
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to save planner: ${e.message}"
+            }
+        }
+    }
+
     // --- Date Navigation ---
 
     fun onDateSelected(date: String) {
-        _currentDate.value = date
+        if (_currentDate.value == date) return
+        viewModelScope.launch {
+            flushCacheToDb()
+            _currentDate.value = date
+            hasUnsavedCache = false
+            observePlannerForDate(date)
+        }
     }
 
     fun onPreviousDay() {
         val current = DateUtils.parseIsoDate(_currentDate.value) ?: LocalDate.now()
-        _currentDate.value = DateUtils.toIsoString(current.minusDays(1))
+        onDateSelected(DateUtils.toIsoString(current.minusDays(1)))
     }
 
     fun onNextDay() {
         val current = DateUtils.parseIsoDate(_currentDate.value) ?: LocalDate.now()
-        _currentDate.value = DateUtils.toIsoString(current.plusDays(1))
+        onDateSelected(DateUtils.toIsoString(current.plusDays(1)))
     }
 
     fun onToday() {
-        _currentDate.value = DateUtils.toIsoString(LocalDate.now())
+        onDateSelected(DateUtils.toIsoString(LocalDate.now()))
     }
 
-    // --- Planner Actions ---
+    // --- Planner In-Memory Actions ---
 
     fun onCreateDefaultPlanner() {
         viewModelScope.launch {
             try {
+                flushCacheToDb()
                 val date = _currentDate.value
                 val defaultPlanner = DailyPlanner.createDefault(date)
                 plannerRepository.savePlanner(defaultPlanner)
+                _planner.value = defaultPlanner
+                hasUnsavedCache = false
                 _statusMessage.value = "Created default planner for $date"
             } catch (e: Exception) {
                 _errorMessage.value = "Failed to create planner: ${e.message}"
@@ -115,8 +170,7 @@ class DayPlannerViewModel(
     fun onSaveCurrentPlanner() {
         viewModelScope.launch {
             try {
-                val current = planner.value ?: DailyPlanner.createDefault(_currentDate.value)
-                plannerRepository.savePlanner(current)
+                flushCacheToDb()
                 _statusMessage.value = "Saved planner successfully."
             } catch (e: Exception) {
                 _errorMessage.value = "Failed to save planner: ${e.message}"
@@ -125,229 +179,157 @@ class DayPlannerViewModel(
     }
 
     fun onUpdateFocus(focus: String) {
-        focusDebounceJob?.cancel()
-        focusDebounceJob = viewModelScope.launch {
-            delay(300L)
-            try {
-                plannerRepository.updateFocus(_currentDate.value, focus)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update focus: ${e.message}"
-            }
-        }
+        updateCacheAndScheduleSave { it.copy(focus = focus) }
     }
 
     fun onUpdatePriority(order: Int, title: String, isCompleted: Boolean = false) {
-        priorityDebounceJobs[order]?.cancel()
-        priorityDebounceJobs[order] = viewModelScope.launch {
-            if (!isCompleted) {
-                delay(300L)
-            }
-            try {
-                val currentPriorities = planner.value?.topPriorities?.toMutableList() ?: mutableListOf()
-                val existingIndex = currentPriorities.indexOfFirst { it.order == order }
-                val updatedItem = PriorityItem(
-                    id = if (existingIndex >= 0) currentPriorities[existingIndex].id else IdGenerator.generate(),
+        updateCacheAndScheduleSave { current ->
+            val list = current.topPriorities.toMutableList()
+            val index = list.indexOfFirst { it.order == order }
+            val updatedItem = if (index >= 0) {
+                list[index].copy(title = title, isCompleted = isCompleted, updatedAt = System.currentTimeMillis())
+            } else {
+                PriorityItem(
+                    id = IdGenerator.generate(),
                     plannerDate = _currentDate.value,
                     order = order,
                     title = title,
                     isCompleted = isCompleted
                 )
-
-                if (existingIndex >= 0) {
-                    currentPriorities[existingIndex] = updatedItem
-                } else {
-                    currentPriorities.add(updatedItem)
-                }
-
-                plannerRepository.updatePriorities(_currentDate.value, currentPriorities)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update priority: ${e.message}"
             }
+            if (index >= 0) list[index] = updatedItem else list.add(updatedItem)
+            current.copy(topPriorities = list)
         }
     }
 
     fun onAddTodo(title: String) {
         if (title.isBlank()) return
-        viewModelScope.launch {
-            try {
-                val newTodo = TodoItem(
-                    id = IdGenerator.generate(),
-                    plannerDate = _currentDate.value,
-                    title = title,
-                    order = planner.value?.todos?.size ?: 0
-                )
-                plannerRepository.addTodo(newTodo)
-                _statusMessage.value = "Added task: $title"
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to add todo: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            val newTodo = TodoItem(
+                id = IdGenerator.generate(),
+                plannerDate = _currentDate.value,
+                title = title,
+                order = current.todos.size
+            )
+            current.copy(todos = current.todos + newTodo)
         }
+        _statusMessage.value = "Added task: $title"
     }
 
     fun onToggleTodo(id: String, isCompleted: Boolean) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.toggleTodoCompletion(id, isCompleted)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to toggle todo: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                todos = current.todos.map { if (it.id == id) it.copy(isCompleted = isCompleted) else it }
+            )
         }
     }
 
     fun onDeleteTodo(id: String) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.deleteTodo(id)
-                _statusMessage.value = "Deleted task"
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to delete todo: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                todos = current.todos.filter { it.id != id }
+            )
         }
+        _statusMessage.value = "Deleted task"
     }
 
     fun onUpdateScheduleSlot(slot: String, activity: String) {
-        scheduleDebounceJobs[slot]?.cancel()
-        scheduleDebounceJobs[slot] = viewModelScope.launch {
-            delay(300L)
-            try {
-                val currentSchedule = planner.value?.schedule?.toMutableList() ?: mutableListOf()
-                val index = currentSchedule.indexOfFirst { it.timeSlot == slot }
-                if (index >= 0) {
-                    currentSchedule[index] = currentSchedule[index].copy(activity = activity)
-                } else {
-                    currentSchedule.add(
-                        ScheduleItem(
-                            id = IdGenerator.generate(),
-                            plannerDate = _currentDate.value,
-                            timeSlot = slot,
-                            activity = activity
-                        )
-                    )
-                }
-                plannerRepository.updateSchedule(_currentDate.value, currentSchedule)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update schedule: ${e.message}"
+        updateCacheAndScheduleSave { current ->
+            val list = current.schedule.toMutableList()
+            val index = list.indexOfFirst { it.timeSlot == slot }
+            val updatedItem = if (index >= 0) {
+                list[index].copy(activity = activity, updatedAt = System.currentTimeMillis())
+            } else {
+                ScheduleItem(
+                    id = IdGenerator.generate(),
+                    plannerDate = _currentDate.value,
+                    timeSlot = slot,
+                    activity = activity
+                )
             }
+            if (index >= 0) list[index] = updatedItem else list.add(updatedItem)
+            current.copy(schedule = list)
         }
     }
 
     fun onToggleSelfCare(id: String, isCompleted: Boolean) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.toggleSelfCare(id, isCompleted)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to toggle self-care: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                selfCare = current.selfCare.map { if (it.id == id) it.copy(isCompleted = isCompleted) else it }
+            )
         }
     }
 
     fun onUpdateNotes(notes: String) {
-        notesDebounceJob?.cancel()
-        notesDebounceJob = viewModelScope.launch {
-            delay(350L)
-            try {
-                plannerRepository.updateNotes(_currentDate.value, notes)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update notes: ${e.message}"
-            }
-        }
+        updateCacheAndScheduleSave { it.copy(notes = notes) }
     }
 
     fun onAddReminder(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            try {
-                val reminder = ReminderItem(
-                    id = IdGenerator.generate(),
-                    plannerDate = _currentDate.value,
-                    text = text,
-                    order = planner.value?.dontForget?.size ?: 0
-                )
-                plannerRepository.addReminder(reminder)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to add reminder: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            val reminder = ReminderItem(
+                id = IdGenerator.generate(),
+                plannerDate = _currentDate.value,
+                text = text,
+                order = current.dontForget.size
+            )
+            current.copy(dontForget = current.dontForget + reminder)
         }
     }
 
     fun onToggleReminder(id: String, isCompleted: Boolean) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.toggleReminderCompletion(id, isCompleted)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to toggle reminder: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                dontForget = current.dontForget.map { if (it.id == id) it.copy(isCompleted = isCompleted) else it }
+            )
         }
     }
 
     fun onDeleteReminder(id: String) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.deleteReminder(id)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to delete reminder: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                dontForget = current.dontForget.filter { it.id != id }
+            )
         }
     }
 
     fun onAddGratitude(text: String) {
         if (text.isBlank()) return
-        viewModelScope.launch {
-            try {
-                val list = planner.value?.gratitude?.toMutableList() ?: mutableListOf()
-                list.add(
-                    GratitudeItem(
-                        id = IdGenerator.generate(),
-                        plannerDate = _currentDate.value,
-                        text = text,
-                        order = list.size
-                    )
+        updateCacheAndScheduleSave { current ->
+            val list = current.gratitude.toMutableList()
+            list.add(
+                GratitudeItem(
+                    id = IdGenerator.generate(),
+                    plannerDate = _currentDate.value,
+                    text = text,
+                    order = list.size
                 )
-                plannerRepository.updateGratitude(_currentDate.value, list)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update gratitude: ${e.message}"
-            }
+            )
+            current.copy(gratitude = list)
         }
     }
 
     fun onSelectMood(moodType: MoodType) {
-        viewModelScope.launch {
-            try {
-                plannerRepository.updateMood(_currentDate.value, Mood(type = moodType))
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update mood: ${e.message}"
-            }
+        updateCacheAndScheduleSave { current ->
+            current.copy(mood = Mood(type = moodType))
         }
     }
 
     fun onUpdateReflection(whatWentWell: String, whatCanImprove: String, proudOf: String) {
-        reflectionDebounceJob?.cancel()
-        reflectionDebounceJob = viewModelScope.launch {
-            delay(350L)
-            try {
-                val reflection = Reflection(
+        updateCacheAndScheduleSave { current ->
+            current.copy(
+                reflection = Reflection(
                     whatWentWell = whatWentWell,
                     whatCanImprove = whatCanImprove,
                     proudOf = proudOf,
                     updatedAt = System.currentTimeMillis()
                 )
-                plannerRepository.updateReflection(_currentDate.value, reflection)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update reflection: ${e.message}"
-            }
+            )
         }
     }
 
     fun onUpdateDailyReminder(text: String) {
-        reminderDebounceJob?.cancel()
-        reminderDebounceJob = viewModelScope.launch {
-            delay(300L)
-            try {
-                plannerRepository.updateDailyReminder(_currentDate.value, text)
-            } catch (e: Exception) {
-                _errorMessage.value = "Failed to update daily reminder: ${e.message}"
-            }
-        }
+        updateCacheAndScheduleSave { it.copy(dailyReminder = text) }
     }
 
     // --- Authentication & Cloud Sync Actions ---
@@ -355,10 +337,19 @@ class DayPlannerViewModel(
     fun onGoogleSignInSuccess(user: AuthUser) {
         viewModelScope.launch {
             try {
+                flushCacheToDb()
+                dbFlushJob?.cancel()
+                _planner.value = null
+                hasUnsavedCache = false
+
                 authRepository?.signIn(user)
                 _statusMessage.value = "Signed in as ${user.email}"
                 _isGuestMode.value = false
-                // Trigger auto sync upon sign in
+
+                // Switch local storage profile to this user's email
+                plannerRepository.switchProfile(user.email)
+                observePlannerForDate(_currentDate.value)
+
                 onTriggerSync()
             } catch (e: Exception) {
                 _errorMessage.value = "Sign in error: ${e.message}"
@@ -372,15 +363,33 @@ class DayPlannerViewModel(
     }
 
     fun onSkipGuestMode() {
-        _isGuestMode.value = true
+        viewModelScope.launch {
+            flushCacheToDb()
+            dbFlushJob?.cancel()
+            _planner.value = null
+            hasUnsavedCache = false
+
+            _isGuestMode.value = true
+            plannerRepository.switchProfile("guest")
+            observePlannerForDate(_currentDate.value)
+        }
     }
 
     fun onSignOut() {
         viewModelScope.launch {
             try {
+                flushCacheToDb()
+                dbFlushJob?.cancel()
+                _planner.value = null
+                hasUnsavedCache = false
+
                 authRepository?.signOut()
                 _statusMessage.value = "Signed out"
                 _isGuestMode.value = false
+
+                // Switch local storage profile back to guest
+                plannerRepository.switchProfile("guest")
+                observePlannerForDate(_currentDate.value)
             } catch (e: Exception) {
                 _errorMessage.value = "Sign out failed: ${e.message}"
             }
@@ -390,6 +399,7 @@ class DayPlannerViewModel(
     fun onTriggerSync() {
         viewModelScope.launch {
             try {
+                flushCacheToDb() // Guarantee disk has all current user edits before sync
                 val result = syncRepository?.syncPlanner(_currentDate.value)
                 when (result) {
                     is SyncResult.Success -> _statusMessage.value = "Drive sync complete"
@@ -405,8 +415,51 @@ class DayPlannerViewModel(
         }
     }
 
+    // --- PDF Export Action ---
+
+    fun onExportPdf(context: Context) {
+        viewModelScope.launch {
+            _isExportingPdf.value = true
+            _statusMessage.value = "Generating diary PDF..."
+            try {
+                flushCacheToDb() // Ensure cache is committed
+                val currentPlanner = _planner.value ?: return@launch
+                val result = DiaryPdfGenerator.generatePdf(context.applicationContext, currentPlanner)
+                result.onSuccess { exportResult ->
+                    _pdfExportResult.value = exportResult
+                    _statusMessage.value = "PDF exported: ${exportResult.destinationDescription}"
+                }.onFailure { e ->
+                    _errorMessage.value = "Failed to export PDF: ${e.message}"
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Failed to export PDF: ${e.message}"
+            } finally {
+                _isExportingPdf.value = false
+            }
+        }
+    }
+
+    fun clearPdfExportResult() {
+        _pdfExportResult.value = null
+    }
+
     fun clearMessages() {
         _statusMessage.value = null
         _errorMessage.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        dbFlushJob?.cancel()
+        if (hasUnsavedCache) {
+            val toSave = _planner.value
+            if (toSave != null) {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        plannerRepository.savePlanner(toSave)
+                    } catch (_: Exception) {}
+                }
+            }
+        }
     }
 }

@@ -13,10 +13,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -34,14 +30,6 @@ fun DailyReminderSection(
     onReminderChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf(reminder) }
-
-    androidx.compose.runtime.LaunchedEffect(reminder) {
-        if (reminder != text) {
-            text = reminder
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -60,11 +48,8 @@ fun DailyReminderSection(
         Spacer(modifier = Modifier.height(4.dp))
 
         BasicTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onReminderChange(it)
-            },
+            value = reminder,
+            onValueChange = onReminderChange,
             textStyle = TextStyle(
                 fontFamily = FontFamily.Serif,
                 fontStyle = FontStyle.Italic,
@@ -77,7 +62,7 @@ fun DailyReminderSection(
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { innerTextField ->
                 Box {
-                    if (text.isEmpty()) {
+                    if (reminder.isEmpty()) {
                         Text(
                             text = "“Be kind to yourself. You are doing your best.”",
                             style = TextStyle(

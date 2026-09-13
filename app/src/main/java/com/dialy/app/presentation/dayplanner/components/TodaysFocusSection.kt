@@ -13,10 +13,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -33,14 +29,6 @@ fun TodaysFocusSection(
     onFocusChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf(focus) }
-
-    androidx.compose.runtime.LaunchedEffect(focus) {
-        if (focus != text) {
-            text = focus
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -60,11 +48,8 @@ fun TodaysFocusSection(
         Spacer(modifier = Modifier.height(6.dp))
 
         BasicTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onFocusChange(it)
-            },
+            value = focus,
+            onValueChange = onFocusChange,
             textStyle = TextStyle(
                 fontFamily = FontFamily.Serif,
                 fontSize = 16.5.sp,
@@ -77,7 +62,7 @@ fun TodaysFocusSection(
             modifier = Modifier.fillMaxWidth(),
             decorationBox = { innerTextField ->
                 Box {
-                    if (text.isEmpty()) {
+                    if (focus.isEmpty()) {
                         Text(
                             text = "Tap to set today's singular focus...",
                             style = TextStyle(

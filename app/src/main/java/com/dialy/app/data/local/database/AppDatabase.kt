@@ -33,7 +33,7 @@ import com.dialy.app.data.local.entities.TodoEntity
         ReminderEntity::class,
         GratitudeEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -48,23 +48,33 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun gratitudeDao(): GratitudeDao
 
     companion object {
-        private const val DATABASE_NAME = "smart_diary.db"
+        private const val DEFAULT_DATABASE_NAME = "smart_diary.db"
+        private val instances = java.util.concurrent.ConcurrentHashMap<String, AppDatabase>()
 
-        @Volatile
-        private var INSTANCE: AppDatabase? = null
-
-        fun getInstance(context: Context): AppDatabase {
-            return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+        fun getInstance(context: Context, profileId: String = "guest"): AppDatabase {
+            val normalized = sanitizeProfileId(profileId)
+            return instances.computeIfAbsent(normalized) { profile ->
+                val dbName = if (profile == "guest") {
+                    DEFAULT_DATABASE_NAME
+                } else {
+                    "smart_diary_user_${profile}.db"
+                }
+                Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    DATABASE_NAME
+                    dbName
                 )
                     .fallbackToDestructiveMigration()
                     .build()
-                INSTANCE = instance
-                instance
             }
+        }
+
+        private fun sanitizeProfileId(profileId: String): String {
+            val trimmed = profileId.trim().lowercase(java.util.Locale.ROOT)
+            if (trimmed.isEmpty() || trimmed == "guest") return "guest"
+            return trimmed
+                .replace("@", "_at_")
+                .replace("[^a-z0-9_]".toRegex(), "_")
         }
     }
 }

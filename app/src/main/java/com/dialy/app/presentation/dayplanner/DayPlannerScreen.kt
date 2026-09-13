@@ -12,15 +12,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dialy.app.core.pdf.DiaryPdfGenerator
 import com.dialy.app.core.sync.SyncState
 import com.dialy.app.presentation.dayplanner.components.DailyReminderSection
 import com.dialy.app.presentation.dayplanner.components.DontForgetSection
@@ -47,6 +51,9 @@ fun DayPlannerScreen(
     val authState by viewModel.authState.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val pdfExportResult by viewModel.pdfExportResult.collectAsState()
+    val isExportingPdf by viewModel.isExportingPdf.collectAsState()
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(statusMessage) {
@@ -63,6 +70,20 @@ fun DayPlannerScreen(
         }
     }
 
+    LaunchedEffect(pdfExportResult) {
+        pdfExportResult?.let { result ->
+            val snackbarAction = snackbarHostState.showSnackbar(
+                message = "✨ Planner PDF saved to Downloads!",
+                actionLabel = "Open PDF",
+                duration = SnackbarDuration.Long
+            )
+            if (snackbarAction == SnackbarResult.ActionPerformed) {
+                DiaryPdfGenerator.openPdfViewer(context, result.uri)
+            }
+            viewModel.clearPdfExportResult()
+        }
+    }
+
     DiaryTheme {
         Scaffold(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -76,16 +97,19 @@ fun DayPlannerScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // 1. Header Section (Date, Day of Week, Sync status, Account)
+                // 1. Header Section (Date, Day of Week, Sync status, PDF Download, Account)
                 item(key = "section_header", contentType = "header") {
                     HeaderSection(
                         currentDateString = currentDate,
                         syncState = planner?.syncState ?: SyncState.LOCAL_ONLY,
                         authState = authState,
+                        isExportingPdf = isExportingPdf,
                         onPreviousDay = { viewModel.onPreviousDay() },
                         onNextDay = { viewModel.onNextDay() },
                         onToday = { viewModel.onToday() },
+                        onDateSelected = { viewModel.onDateSelected(it) },
                         onSyncClick = { viewModel.onTriggerSync() },
+                        onDownloadPdfClick = { viewModel.onExportPdf(context) },
                         onSignOutClick = {
                             if (onSignOutClick != null) {
                                 onSignOutClick()

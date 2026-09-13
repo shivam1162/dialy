@@ -23,11 +23,20 @@ import kotlinx.serialization.json.Json
  */
 class SyncRepositoryImpl(
     private val plannerRepository: PlannerRepository,
-    private val plannerDao: DailyPlannerDao,
     private val driveDataSource: DriveDataSource,
     private val authRepository: AuthRepository,
-    private val dispatchers: DispatcherProvider
+    private val dispatchers: DispatcherProvider,
+    private val plannerDao: DailyPlannerDao? = null
 ) : SyncRepository {
+
+    // Secondary constructor for compatibility with existing tests and callers
+    constructor(
+        plannerRepository: PlannerRepository,
+        plannerDao: DailyPlannerDao,
+        driveDataSource: DriveDataSource,
+        authRepository: AuthRepository,
+        dispatchers: DispatcherProvider
+    ) : this(plannerRepository, driveDataSource, authRepository, dispatchers, plannerDao)
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; isLenient = true }
 
@@ -68,7 +77,7 @@ class SyncRepositoryImpl(
                         syncState = SyncState.SYNCED,
                         lastSyncedAt = System.currentTimeMillis()
                     )
-                    plannerDao.updateSyncState(date, SyncState.SYNCED.name, synced.lastSyncedAt)
+                    plannerRepository.updateSyncState(date, SyncState.SYNCED.name, synced.lastSyncedAt)
                     synced
                 }
                 localPlanner == null && remotePlanner != null -> {
@@ -101,7 +110,7 @@ class SyncRepositoryImpl(
                             syncState = SyncState.SYNCED,
                             lastSyncedAt = System.currentTimeMillis()
                         )
-                        plannerDao.updateSyncState(date, SyncState.SYNCED.name, synced.lastSyncedAt)
+                        plannerRepository.updateSyncState(date, SyncState.SYNCED.name, synced.lastSyncedAt)
                         synced
                     }
                 }
@@ -124,11 +133,11 @@ class SyncRepositoryImpl(
         _syncState.value = SyncState.SYNC_PENDING
 
         try {
-            val localEntities = plannerDao.getAllPlannersOnce()
+            val localPlanners = plannerRepository.getAllPlannersOnce()
             val syncedPlanners = mutableListOf<DailyPlanner>()
 
-            for (entity in localEntities) {
-                val syncRes = syncPlanner(entity.date)
+            for (planner in localPlanners) {
+                val syncRes = syncPlanner(planner.date)
                 if (syncRes is SyncResult.Success) {
                     syncedPlanners.add(syncRes.data)
                 }
@@ -149,8 +158,7 @@ class SyncRepositoryImpl(
         }
 
         try {
-            val entities = plannerDao.getAllPlannersOnce()
-            val allPlanners = entities.mapNotNull { plannerRepository.getPlanner(it.date) }
+            val allPlanners = plannerRepository.getAllPlannersOnce()
             val backupJson = json.encodeToString(allPlanners)
 
             driveDataSource.uploadFile("smart_diary_full_backup.json", backupJson)
@@ -190,7 +198,7 @@ class SyncRepositoryImpl(
             val cutoffDateStr = DateUtils.toIsoString(cutoffDate)
 
             // 1. Get all local planners older than the retention window
-            val allPlanners = plannerDao.getAllPlannersOnce()
+            val allPlanners = plannerRepository.getAllPlannersOnce()
             val oldPlanners = allPlanners.filter { it.date <= cutoffDateStr }
 
             var purgedCount = 0

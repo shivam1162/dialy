@@ -20,21 +20,29 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,19 +63,25 @@ import com.dialy.app.core.auth.AuthUser
 import com.dialy.app.core.sync.SyncState
 import com.dialy.app.core.util.DateUtils
 import com.dialy.app.presentation.theme.DiaryColors
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HeaderSection(
     currentDateString: String,
     syncState: SyncState = SyncState.LOCAL_ONLY,
     authState: AuthState = AuthState.Unauthenticated,
+    isExportingPdf: Boolean = false,
     onPreviousDay: () -> Unit,
     onNextDay: () -> Unit,
     onToday: () -> Unit,
+    onDateSelected: (String) -> Unit = {},
     onSyncClick: () -> Unit,
+    onDownloadPdfClick: () -> Unit = {},
     onSignOutClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -76,6 +90,75 @@ fun HeaderSection(
     val formattedDate = date.format(DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.getDefault()))
 
     var showAccountDialog by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        val initialMillis = remember(currentDateString) {
+            date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        }
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val selectedLocalDate = Instant.ofEpochMilli(millis)
+                                .atZone(ZoneOffset.UTC)
+                                .toLocalDate()
+                            onDateSelected(DateUtils.toIsoString(selectedLocalDate))
+                        }
+                        showDatePicker = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = DiaryColors.GoldAccent)
+                ) {
+                    Text("Select", color = Color.White)
+                }
+            },
+            dismissButton = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = {
+                            onToday()
+                            showDatePicker = false
+                        }
+                    ) {
+                        Text("Today", color = DiaryColors.GoldAccent)
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text("Cancel", color = DiaryColors.TextSecondary)
+                    }
+                }
+            },
+            colors = DatePickerDefaults.colors(
+                containerColor = DiaryColors.CardBackground
+            )
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = DiaryColors.CardBackground,
+                    titleContentColor = DiaryColors.TextPrimary,
+                    headlineContentColor = DiaryColors.GoldAccent,
+                    weekdayContentColor = DiaryColors.TextSecondary,
+                    subheadContentColor = DiaryColors.TextPrimary,
+                    yearContentColor = DiaryColors.TextPrimary,
+                    currentYearContentColor = DiaryColors.GoldAccent,
+                    selectedYearContentColor = DiaryColors.PaperBackground,
+                    selectedYearContainerColor = DiaryColors.GoldAccent,
+                    dayContentColor = DiaryColors.TextPrimary,
+                    selectedDayContentColor = DiaryColors.PaperBackground,
+                    selectedDayContainerColor = DiaryColors.GoldAccent,
+                    todayContentColor = DiaryColors.GoldAccent,
+                    todayDateBorderColor = DiaryColors.GoldAccent
+                )
+            )
+        }
+    }
 
     if (showAccountDialog) {
         AlertDialog(
@@ -128,9 +211,37 @@ fun HeaderSection(
                             )
                         }
                         else -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(DiaryColors.SubtleCard)
+                                    .padding(10.dp)
+                            ) {
+                                UserAvatar(
+                                    user = null,
+                                    size = 46.dp
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Guest User",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DiaryColors.TextPrimary
+                                    )
+                                    Text(
+                                        text = "Offline Guest Profile",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = DiaryColors.TextSecondary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Running in Offline / Guest Mode",
-                                style = MaterialTheme.typography.bodyMedium,
+                                text = "Data is stored locally on this device.",
+                                style = MaterialTheme.typography.labelSmall,
                                 color = DiaryColors.TextSecondary
                             )
                         }
@@ -139,27 +250,27 @@ fun HeaderSection(
             },
             confirmButton = {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = {
-                            showAccountDialog = false
-                            onSyncClick()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = DiaryColors.GoldAccent)
-                    ) {
-                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Sync Now")
-                    }
                     if (authState is AuthState.Authenticated) {
-                        OutlinedButton(
+                        Button(
                             onClick = {
                                 showAccountDialog = false
-                                onSignOutClick()
+                                onSyncClick()
                             },
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                            colors = ButtonDefaults.buttonColors(containerColor = DiaryColors.GoldAccent)
                         ) {
-                            Text("Sign Out")
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sync Now")
                         }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            showAccountDialog = false
+                            onSignOutClick()
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                    ) {
+                        Text("Sign Out")
                     }
                 }
             },
@@ -252,6 +363,42 @@ fun HeaderSection(
                     }
                 }
 
+                // Download PDF Button
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DiaryColors.PeachSoft)
+                        .clickable(enabled = !isExportingPdf) { onDownloadPdfClick() }
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (isExportingPdf) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.5.dp,
+                                color = DiaryColors.GoldAccent
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download PDF",
+                                tint = DiaryColors.GoldAccent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Text(
+                            text = if (isExportingPdf) "Exporting..." else "PDF",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = DiaryColors.TextPrimary
+                        )
+                    }
+                }
+
                 // Profile Avatar / Settings button
                 UserAvatar(
                     user = (authState as? AuthState.Authenticated)?.user,
@@ -287,13 +434,16 @@ fun HeaderSection(
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { onToday() }
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { showDatePicker = true }
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Today,
-                    contentDescription = "Today",
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "Open Calendar",
                     tint = DiaryColors.GoldAccent,
-                    modifier = Modifier.size(14.dp)
+                    modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -387,11 +537,12 @@ fun UserAvatar(
                 )
             }
         } else {
-            Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = "Account",
-                tint = DiaryColors.TextSecondary,
-                modifier = Modifier.size(size * 0.65f)
+            Text(
+                text = "G",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                fontSize = (size.value * 0.48f).sp,
+                color = DiaryColors.GoldAccent
             )
         }
     }

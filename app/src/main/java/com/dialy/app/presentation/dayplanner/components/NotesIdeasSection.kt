@@ -13,10 +13,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -31,14 +27,6 @@ fun NotesIdeasSection(
     onNotesChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var text by remember { mutableStateOf(notes) }
-
-    androidx.compose.runtime.LaunchedEffect(notes) {
-        if (notes != text) {
-            text = notes
-        }
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -57,11 +45,8 @@ fun NotesIdeasSection(
         Spacer(modifier = Modifier.height(10.dp))
 
         BasicTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onNotesChange(it)
-            },
+            value = notes,
+            onValueChange = onNotesChange,
             textStyle = TextStyle(
                 fontFamily = androidx.compose.ui.text.font.FontFamily.Serif,
                 fontSize = 15.sp,
@@ -75,7 +60,7 @@ fun NotesIdeasSection(
                 .height(120.dp),
             decorationBox = { innerTextField ->
                 Box {
-                    if (text.isEmpty()) {
+                    if (notes.isEmpty()) {
                         Text(
                             text = "Write your thoughts, ideas, or daily notes here...",
                             style = TextStyle(

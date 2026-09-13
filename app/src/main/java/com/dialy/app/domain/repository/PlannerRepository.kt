@@ -86,4 +86,13 @@ interface PlannerRepository {
     suspend fun updateReflection(date: String, reflection: Reflection)
 
     suspend fun updateDailyReminder(date: String, reminder: String)
+
+    suspend fun updateSyncState(date: String, syncState: String, lastSyncedAt: Long?) {}
+
+    suspend fun getAllPlannersOnce(): List<DailyPlanner> = emptyList()
+
+    /**
+     * Switches the active local storage profile (e.g. "guest", "user@gmail.com").
+     */
+    fun switchProfile(profileId: String) {}
 }

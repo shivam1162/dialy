@@ -44,7 +44,9 @@ class MainActivity : ComponentActivity() {
         googleAuthManager = GoogleAuthManager(this)
         authRepository = AuthRepositoryImpl()
 
-        val database = AppDatabase.getInstance(applicationContext)
+        val lastUser = googleAuthManager.getLastSignedInUser()
+        val initialProfile = lastUser?.email ?: "guest"
+        val database = AppDatabase.getInstance(applicationContext, initialProfile)
         val dispatchers = DefaultDispatcherProvider()
 
         val plannerRepository = PlannerRepositoryImpl(
@@ -55,37 +57,47 @@ class MainActivity : ComponentActivity() {
             selfCareDao = database.selfCareDao(),
             reminderDao = database.reminderDao(),
             gratitudeDao = database.gratitudeDao(),
-            dispatchers = dispatchers
+            dispatchers = dispatchers,
+            context = applicationContext
         )
+        plannerRepository.switchProfile(initialProfile)
 
         // Initialize Drive Data Source (ready for Google Drive AppData folder operations)
         val driveDataSource = object : DriveDataSource {
-            private val cache = mutableMapOf<String, String>()
+            // Partition cloud files per user profile to guarantee zero cross-account sync contamination
+            private val userCaches = java.util.concurrent.ConcurrentHashMap<String, MutableMap<String, String>>()
+
+            private fun getActiveUserCache(): MutableMap<String, String> {
+                val currentEmail = authRepository.currentUser?.email?.trim()?.lowercase() ?: "guest"
+                return userCaches.computeIfAbsent(currentEmail) {
+                    java.util.concurrent.ConcurrentHashMap()
+                }
+            }
 
             override suspend fun uploadFile(fileName: String, content: String): Result<String> {
-                cache[fileName] = content
+                getActiveUserCache()[fileName] = content
                 return Result.success(fileName)
             }
 
             override suspend fun downloadFile(fileName: String): Result<String?> {
-                return Result.success(cache[fileName])
+                return Result.success(getActiveUserCache()[fileName])
             }
 
             override suspend fun listFiles(): Result<List<RemoteDriveFile>> {
+                val cache = getActiveUserCache()
                 return Result.success(cache.map {
                     RemoteDriveFile(id = it.key, name = it.key, modifiedTime = System.currentTimeMillis())
                 })
             }
 
             override suspend fun deleteFile(fileName: String): Result<Unit> {
-                cache.remove(fileName)
+                getActiveUserCache().remove(fileName)
                 return Result.success(Unit)
             }
         }
 
         val syncRepository = SyncRepositoryImpl(
             plannerRepository = plannerRepository,
-            plannerDao = database.dailyPlannerDao(),
             driveDataSource = driveDataSource,
             authRepository = authRepository,
             dispatchers = dispatchers

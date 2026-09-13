@@ -15,10 +15,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,14 +52,6 @@ fun ScheduleSection(
         val displaySlots = if (schedule.isNotEmpty()) schedule else defaultSlots()
 
         displaySlots.forEach { item ->
-            var activityText by remember(item.timeSlot) { mutableStateOf(item.activity) }
-
-            androidx.compose.runtime.LaunchedEffect(item.activity) {
-                if (item.activity != activityText) {
-                    activityText = item.activity
-                }
-            }
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -82,9 +70,8 @@ fun ScheduleSection(
                 // Ruled Activity Line
                 Column(modifier = Modifier.weight(1f)) {
                     BasicTextField(
-                        value = activityText,
+                        value = item.activity,
                         onValueChange = {
-                            activityText = it
                             onUpdateScheduleSlot(item.timeSlot, it)
                         },
                         textStyle = TextStyle(
@@ -97,7 +84,7 @@ fun ScheduleSection(
                         modifier = Modifier.fillMaxWidth(),
                         decorationBox = { innerTextField ->
                             Box {
-                                if (activityText.isEmpty()) {
+                                if (item.activity.isEmpty()) {
                                     Text(
                                         text = "Plan this time slot...",
                                         style = TextStyle(

@@ -29,15 +29,36 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class PlannerRepositoryImpl(
-    private val plannerDao: DailyPlannerDao,
-    private val todoDao: TodoDao,
-    private val priorityDao: PriorityDao,
-    private val scheduleDao: ScheduleDao,
-    private val selfCareDao: SelfCareDao,
-    private val reminderDao: ReminderDao,
-    private val gratitudeDao: GratitudeDao,
-    private val dispatchers: DispatcherProvider
+    private var plannerDao: DailyPlannerDao,
+    private var todoDao: TodoDao,
+    private var priorityDao: PriorityDao,
+    private var scheduleDao: ScheduleDao,
+    private var selfCareDao: SelfCareDao,
+    private var reminderDao: ReminderDao,
+    private var gratitudeDao: GratitudeDao,
+    private val dispatchers: DispatcherProvider,
+    private val context: android.content.Context? = null
 ) : PlannerRepository {
+
+    private var activeProfileId: String = ""
+
+    override fun switchProfile(profileId: String) {
+        val normalized = if (profileId.isBlank()) "guest" else profileId.trim().lowercase()
+        if (activeProfileId != normalized) {
+            android.util.Log.d("PlannerRepo", "switchProfile: switching active profile from '$activeProfileId' to '$normalized'")
+            activeProfileId = normalized
+            if (context != null) {
+                val db = com.dialy.app.data.local.database.AppDatabase.getInstance(context, normalized)
+                plannerDao = db.dailyPlannerDao()
+                todoDao = db.todoDao()
+                priorityDao = db.priorityDao()
+                scheduleDao = db.scheduleDao()
+                selfCareDao = db.selfCareDao()
+                reminderDao = db.reminderDao()
+                gratitudeDao = db.gratitudeDao()
+            }
+        }
+    }
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
@@ -100,6 +121,14 @@ class PlannerRepositoryImpl(
         ) { (planners) ->
             planners.map { it.toDomain() }
         }.flowOn(dispatchers.io)
+    }
+
+    override suspend fun getAllPlannersOnce(): List<DailyPlanner> = withContext(dispatchers.io) {
+        plannerDao.getAllPlannersOnce().mapNotNull { getPlanner(it.date) }
+    }
+
+    override suspend fun updateSyncState(date: String, syncState: String, lastSyncedAt: Long?) = withContext(dispatchers.io) {
+        plannerDao.updateSyncState(date, syncState, lastSyncedAt)
     }
 
     override suspend fun savePlanner(planner: DailyPlanner): DailyPlanner = withContext(dispatchers.io) {
