@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OfflineBolt
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -29,13 +27,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,13 +48,9 @@ import com.dialy.app.presentation.theme.DiaryTheme
 fun AuthScreen(
     authState: AuthState,
     onSignInClick: () -> Unit,
-    onMockSignInClick: (String) -> Unit,
     onSkipGuestClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showCustomEmailField by remember { mutableStateOf(false) }
-    var customEmail by remember { mutableStateOf("") }
-
     DiaryTheme {
         Box(
             modifier = modifier
@@ -157,7 +146,7 @@ fun AuthScreen(
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
                             Text(
-                                text = "⚠️ Google Sign-In Status:",
+                                text = "⚠️ Sign-In Error:",
                                 color = DiaryColors.TextPrimary,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
@@ -170,13 +159,6 @@ fun AuthScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "💡 Tip: To test immediately, use 'One-Tap Google Login' below.",
-                                color = DiaryColors.TextSecondary,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.5.sp
                             )
                         }
                     }
@@ -215,87 +197,14 @@ fun AuthScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Direct One-Tap Login Button (Instantly starts session with user's Google email)
-                Button(
-                    onClick = {
-                        showCustomEmailField = !showCustomEmailField
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(46.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = DiaryColors.GoldAccent,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (showCustomEmailField) "Hide Email Login" else "One-Tap Google Login",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                if (showCustomEmailField || authState is AuthState.Error) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = DiaryColors.CardBackground),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DiaryColors.BorderSubtle)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text(
-                                text = "Enter your Google email:",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium,
-                                color = DiaryColors.TextSecondary
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = customEmail,
-                                    onValueChange = { customEmail = it },
-                                    placeholder = { Text("my.email@gmail.com", fontSize = 13.sp) },
-                                    modifier = Modifier.weight(1f),
-                                    singleLine = true
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Button(
-                                    onClick = {
-                                        val email = if (customEmail.isNotBlank()) customEmail.trim() else "my.diary@gmail.com"
-                                        onMockSignInClick(email)
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = DiaryColors.SageAccent,
-                                        contentColor = Color.White
-                                    ),
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Text("Login")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Guest / Offline Mode
+                // Guest / Offline Mode Button
                 OutlinedButton(
                     onClick = onSkipGuestClick,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp),
+                        .height(46.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = DiaryColors.TextSecondary),
                     border = androidx.compose.foundation.BorderStroke(1.dp, DiaryColors.BorderSubtle)

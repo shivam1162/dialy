@@ -328,16 +328,6 @@ class DayPlannerViewModel(
 
     // --- Authentication & Cloud Sync Actions ---
 
-    fun onSignInMockUser(email: String = "test.user@gmail.com") {
-        onGoogleSignInSuccess(
-            AuthUser(
-                id = "mock_user_id",
-                email = email,
-                displayName = "Diary User"
-            )
-        )
-    }
-
     fun onGoogleSignInSuccess(user: AuthUser) {
         viewModelScope.launch {
             try {

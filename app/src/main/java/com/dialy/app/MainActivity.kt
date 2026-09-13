@@ -143,9 +143,6 @@ fun AppNavigation(
             onSignInClick = {
                 googleSignInLauncher.launch(googleAuthManager.signInIntent)
             },
-            onMockSignInClick = { email ->
-                viewModel.onSignInMockUser(email)
-            },
             onSkipGuestClick = {
                 viewModel.onSkipGuestMode()
             }
